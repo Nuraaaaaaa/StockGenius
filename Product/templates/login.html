@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StockGenius • Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+   
+      .left-spotlight::before {
+        content: "";
+        position: absolute;
+        inset: -40px;
+        background: radial-gradient(600px 420px at 20% 15%, rgba(255,255,255,0.18), rgba(255,255,255,0) 60%);
+        pointer-events: none;
+      }
+    </style>
+  </head>
+
+  <body class="min-h-screen bg-white">
+    <div class="min-h-screen border-t-4 border-gray-900">
+      <div class="flex min-h-screen">
+        <!-- LEFT PANEL -->
+        <aside class="relative left-spotlight w-[42%] min-w-[320px] bg-gradient-to-br from-[#2f6bff] via-[#2459e6] to-[#183fbf] text-white overflow-hidden">
+          <div class="p-8">
+            <!-- Logo -->
+            <div class="flex items-center gap-3">
+              <div class="h-9 w-9 rounded-lg bg-white/15 ring-1 ring-white/25 flex items-center justify-center">
+                <!-- simple “bag/box” icon -->
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" class="text-white">
+                  <path d="M7 8V7a5 5 0 0 1 10 0v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M6 8h12a2 2 0 0 1 2 2v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-9a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2" />
+                  <path d="M9 13h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <span class="font-semibold tracking-wide">StockGenius</span>
+            </div>
+
+            <!-- Headline -->
+            <h1 class="mt-10 text-2xl font-semibold leading-snug">
+              AI-Powered Smart<br />
+              Inventory Management
+            </h1>
+
+            <!-- Subtext -->
+            <p class="mt-4 max-w-xs text-[12px] leading-relaxed text-white/70">
+              Streamline your supermarket operations with intelligent demand forecasting,
+              real-time alerts, and ML-powered insights.
+            </p>
+          </div>
+        </aside>
+
+        <!-- RIGHT PANEL -->
+        <main class="flex-1 bg-white">
+          <div class="min-h-screen flex items-center justify-center px-6">
+            <div class="w-full max-w-sm">
+              <h2 class="text-xl font-semibold text-gray-800">Welcome Back</h2>
+              <p class="mt-1 text-sm text-gray-500">Sign in to access your dashboard</p>
+
+              <form id="loginForm" class="mt-6 space-y-4">
+                <!-- Email -->
+                <div>
+                  <label class="block text-xs font-semibold text-gray-700 mb-1">Email Address</label>
+                  <div class="relative">
+                    <span class="absolute inset-y-0 left-3 flex items-center text-gray-400">
+                      <!-- mail icon -->
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Z" stroke="currentColor" stroke-width="2"/>
+                        <path d="M5.5 7.5 12 12l6.5-4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </span>
+                    <input
+                      type="email"
+                      value="admin@stockgenius.com"
+                      class="w-full h-10 rounded-md border border-gray-200 pl-9 pr-3 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
+                    />
+                  </div>
+                </div>
+
+                <!-- Password -->
+                <div>
+                  <label class="block text-xs font-semibold text-gray-700 mb-1">Password</label>
+                  <div class="relative">
+                    <span class="absolute inset-y-0 left-3 flex items-center text-gray-400">
+                      <!-- lock icon -->
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M7 11V8a5 5 0 0 1 10 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M6.5 11h11A2.5 2.5 0 0 1 20 13.5v6A3.5 3.5 0 0 1 16.5 23h-9A3.5 3.5 0 0 1 4 19.5v-6A2.5 2.5 0 0 1 6.5 11Z" stroke="currentColor" stroke-width="2"/>
+                      </svg>
+                    </span>
+
+                    <input
+                      id="password"
+                      type="password"
+                      placeholder="Enter your password"
+                      class="w-full h-10 rounded-md border border-gray-200 pl-9 pr-10 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
+                    />
+
+                    <button
+                      type="button"
+                      id="togglePassword"
+                      class="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-gray-600"
+                      aria-label="Toggle password visibility"
+                    >
+                      <!-- eye icon -->
+                      <svg id="eyeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path
+                          d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z"
+                          stroke="currentColor" stroke-width="2"
+                        />
+                        <path
+                          d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+                          stroke="currentColor" stroke-width="2"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Remember + Forgot -->
+                <div class="flex items-center justify-between">
+                  <label class="flex items-center gap-2 text-xs text-gray-600">
+                    <input type="checkbox" class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-200" />
+                    Remember me
+                  </label>
+
+                  <a href="#" class="text-xs text-blue-600 hover:underline">Forgot password?</a>
+                </div>
+
+                <!-- Button -->
+                <button
+                  type="submit"
+                  class="w-full h-10 rounded-md bg-blue-600 text-white text-sm font-medium shadow-sm hover:bg-blue-700 active:bg-blue-800 transition"
+                >
+                  Sign in
+                </button>
+
+                <p class="text-[11px] text-center text-gray-500">
+                  Demo credentials: <span class="font-medium">admin@stockgenius.com / admin123</span>
+                </p>
+              </form>
+
+              <p class="mt-10 text-[11px] text-center text-gray-400">
+                © 2023 StockGenius. All rights reserved.
+              </p>
+
+              <!-- tiny toast -->
+              <div id="toast" class="pointer-events-none fixed bottom-5 right-5 hidden">
+                <div class="rounded-md bg-gray-900 text-white text-xs px-3 py-2 shadow-lg">
+                  Logged in (demo)
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      // Password visibility toggle
+      const passwordInput = document.getElementById("password");
+      const toggleBtn = document.getElementById("togglePassword");
+
+      toggleBtn.addEventListener("click", () => {
+        const isPassword = passwordInput.type === "password";
+        passwordInput.type = isPassword ? "text" : "password";
+      });
+
+      // Demo submit
+      const form = document.getElementById("loginForm");
+      const toast = document.getElementById("toast");
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        toast.classList.remove("hidden");
+        setTimeout(() => toast.classList.add("hidden"), 1200);
+      });
+    </script>
+  </body>
+</html>
