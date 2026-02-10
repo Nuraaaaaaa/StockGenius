@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Inventory Management</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100">
+
+<div class="flex h-screen">
+
+  <!-- SIDEBAR -->
+  <aside class="w-64 bg-white border-r flex flex-col justify-between">
+    <div>
+      <!-- Logo -->
+      <div class="p-5 border-b flex items-center gap-2">
+        <div class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center">
+          📦
+        </div>
+        <span class="font-semibold">StockGenius</span>
+      </div>
+
+      <!-- User -->
+      <div class="p-4">
+        <div class="bg-gray-100 rounded-lg p-3 flex items-center gap-3">
+          <div class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center">👤</div>
+          <div>
+            <p class="text-sm font-medium">Staff User</p>
+            <p class="text-xs text-gray-500">Staff</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Menu -->
+      <nav class="px-4 space-y-2 text-sm">
+        <a class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100">📊 Dashboard</a>
+        <a class="flex items-center gap-2 p-3 rounded-lg bg-blue-600 text-white">📦 Inventory</a>
+        <a class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100">📈 Analytics</a>
+        <a class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100">🔔 Alerts</a>
+      </nav>
+    </div>
+
+    <!-- Logout -->
+    <div class="p-5 border-t">
+      <a class="flex items-center gap-2 text-red-500 text-sm">↩ Logout</a>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="flex-1 p-6 overflow-y-auto">
+
+    <!-- TOP BAR -->
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-xl font-semibold">Inventory Management</h1>
+      <input
+        type="text"
+        placeholder="Search products, users..."
+        class="border rounded-md px-4 py-2 text-sm w-64"
+      />
+    </div>
+
+    <!-- ACTION BAR -->
+    <div class="flex justify-between items-center mb-4">
+      <div class="flex gap-2">
+        <button class="bg-blue-600 text-white px-4 py-2 rounded-md text-sm">+ Add Product</button>
+        <button class="border px-4 py-2 rounded-md text-sm">Filters</button>
+      </div>
+
+      <div class="flex gap-2">
+        <select class="border px-3 py-2 rounded-md text-sm">
+          <option>All Categories</option>
+        </select>
+        <select class="border px-3 py-2 rounded-md text-sm">
+          <option>All Status</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- PRODUCTS GRID -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+
+      <!-- CARD -->
+      <div class="bg-white rounded-xl shadow-sm p-4">
+        <img src="https://via.placeholder.com/300x160" class="rounded-lg mb-3"/>
+        <h3 class="font-medium">Whole Milk 1L</h3>
+        <p class="text-xs text-gray-500 mb-2">SKU: DRY-001</p>
+        <div class="flex justify-between items-center mb-2">
+          <span class="font-semibold">$3.99</span>
+          <span class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">High Stock</span>
+        </div>
+        <button class="w-full bg-blue-600 text-white text-sm py-2 rounded-md">Edit</button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm p-4">
+        <img src="https://via.placeholder.com/300x160" class="rounded-lg mb-3"/>
+        <h3 class="font-medium">Fresh Bread</h3>
+        <p class="text-xs text-gray-500 mb-2">SKU: BAK-002</p>
+        <div class="flex justify-between items-center mb-2">
+          <span class="font-semibold">$2.49</span>
+          <span class="text-xs bg-yellow-100 text-yellow-600 px-2 py-1 rounded">Low Stock</span>
+        </div>
+        <button class="w-full bg-blue-600 text-white text-sm py-2 rounded-md">Edit</button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm p-4">
+        <img src="https://via.placeholder.com/300x160" class="rounded-lg mb-3"/>
+        <h3 class="font-medium">Organic Eggs (12)</h3>
+        <p class="text-xs text-gray-500 mb-2">SKU: DRY-003</p>
+        <div class="flex justify-between items-center mb-2">
+          <span class="font-semibold">$5.99</span>
+          <span class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">In Stock</span>
+        </div>
+        <button class="w-full bg-blue-600 text-white text-sm py-2 rounded-md">Edit</button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm p-4">
+        <img src="https://via.placeholder.com/300x160" class="rounded-lg mb-3"/>
+        <h3 class="font-medium">Greek Yogurt</h3>
+        <p class="text-xs text-gray-500 mb-2">SKU: DRY-004</p>
+        <div class="flex justify-between items-center mb-2">
+          <span class="font-semibold">$4.49</span>
+          <span class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded">Low Stock</span>
+        </div>
+        <button class="w-full bg-blue-600 text-white text-sm py-2 rounded-md">Edit</button>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>
