@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="bg-gray-100">
+
+<div class="flex h-screen">
+
+  <!-- SIDEBAR -->
+  <aside class="w-64 bg-white border-r flex flex-col justify-between">
+    <div>
+      <div class="p-5 border-b flex items-center gap-2">
+        <div class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center">📦</div>
+        <span class="font-semibold">StockGenius</span>
+      </div>
+
+      <div class="p-4">
+        <div class="bg-gray-100 rounded-lg p-3 flex items-center gap-3">
+          <div class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center">👤</div>
+          <div>
+            <p class="text-sm font-medium">Staff User</p>
+            <p class="text-xs text-gray-500">Staff</p>
+          </div>
+        </div>
+      </div>
+
+      <nav class="px-4 space-y-2 text-sm">
+        <a class="flex items-center gap-2 p-3 rounded-lg bg-blue-600 text-white">📊 Dashboard</a>
+        <a class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100">📦 Inventory</a>
+        <a class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100">📈 Analytics</a>
+        <a class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100">🔔 Alerts</a>
+      </nav>
+    </div>
+
+    <div class="p-5 border-t">
+      <a class="text-red-500 text-sm">↩ Logout</a>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="flex-1 p-6 overflow-y-auto">
+
+    <!-- Top -->
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-xl font-semibold">Dashboard</h1>
+      <input class="border px-4 py-2 rounded-md text-sm w-64" placeholder="Search products, users...">
+    </div>
+
+    <!-- STATS CARDS -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6">
+
+      <div class="bg-white p-5 rounded-xl shadow-sm">
+        <p class="text-sm text-gray-500">Total Products</p>
+        <h2 class="text-2xl font-semibold mt-2">2,547</h2>
+        <p class="text-green-500 text-xs mt-1">▲ 12% vs last month</p>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl shadow-sm">
+        <p class="text-sm text-gray-500">Low Stock Items</p>
+        <h2 class="text-2xl font-semibold mt-2">23</h2>
+        <p class="text-red-500 text-xs mt-1">▼ 8% vs last month</p>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl shadow-sm">
+        <p class="text-sm text-gray-500">Near Expiry</p>
+        <h2 class="text-2xl font-semibold mt-2">8</h2>
+        <p class="text-red-500 text-xs mt-1">▼ 15% vs last month</p>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl shadow-sm">
+        <p class="text-sm text-gray-500">Revenue (MTD)</p>
+        <h2 class="text-2xl font-semibold mt-2">$67,420</h2>
+        <p class="text-green-500 text-xs mt-1">▲ 18% vs last month</p>
+      </div>
+
+    </div>
+
+    <!-- CHARTS -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+
+      <div class="bg-white p-5 rounded-xl shadow-sm">
+        <h3 class="text-sm font-medium mb-4">Sales Trend</h3>
+        <canvas id="lineChart"></canvas>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl shadow-sm">
+        <h3 class="text-sm font-medium mb-4">Top Products</h3>
+        <canvas id="barChart"></canvas>
+      </div>
+
+    </div>
+
+    <!-- RECENT ACTIVITIES -->
+    <div class="bg-white p-5 rounded-xl shadow-sm">
+      <h3 class="text-sm font-medium mb-4">Recent Activities</h3>
+
+      <table class="w-full text-sm">
+        <thead class="text-gray-500 border-b">
+          <tr>
+            <th class="py-2 text-left">Time</th>
+            <th class="py-2 text-left">Action</th>
+            <th class="py-2 text-left">Product</th>
+            <th class="py-2 text-left">User</th>
+            <th class="py-2 text-left">Quantity</th>
+            <th class="py-2 text-left">Status</th>
+          </tr>
+        </thead>
+        <tbody class="text-gray-700">
+          <tr class="border-b">
+            <td class="py-2">2 mins ago</td>
+            <td>Stock Updated</td>
+            <td>Whole Milk 1L</td>
+            <td>John Doe</td>
+            <td>+50</td>
+            <td><span class="bg-green-100 text-green-600 px-2 py-1 rounded text-xs">Success</span></td>
+          </tr>
+          <tr>
+            <td class="py-2">15 mins ago</td>
+            <td>Low Stock Alert</td>
+            <td>Fresh Bread</td>
+            <td>System</td>
+            <td>12</td>
+            <td><span class="bg-yellow-100 text-yellow-600 px-2 py-1 rounded text-xs">Warning</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // Line Chart
+  new Chart(document.getElementById("lineChart"), {
+    type: 'line',
+    data: {
+      labels: ['Jan','Feb','Mar','Apr','May','Jun'],
+      datasets: [
+        {
+          label: 'Actual Sales',
+          data: [45000,52000,49000,60000,58000,65000],
+          borderColor: '#2563eb',
+          fill: false
+        },
+        {
+          label: 'AI Forecast',
+          data: [43000,50000,51000,59000,60000,62000],
+          borderColor: '#8b5cf6',
+          borderDash: [5,5],
+          fill: false
+        }
+      ]
+    }
+  });
+
+  // Bar Chart
+  new Chart(document.getElementById("barChart"), {
+    type: 'bar',
+    data: {
+      labels: ['Milk','Bread','Eggs','Cheese','Butter'],
+      datasets: [{
+        data: [4500,3800,3100,2800,2400],
+        backgroundColor: '#10b981'
+      }]
+    }
+  });
+</script>
+
+</body>
+</html>
