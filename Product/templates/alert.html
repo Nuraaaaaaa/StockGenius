@@ -1,0 +1,237 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Alerts & Notifications</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100">
+
+<div class="flex h-screen">
+
+  <!-- SIDEBAR -->
+  <aside class="w-64 bg-white border-r flex flex-col justify-between">
+    <div>
+      <div class="p-5 border-b flex items-center gap-2">
+        <div class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center">📦</div>
+        <span class="font-semibold">StockGenius</span>
+      </div>
+
+      <div class="p-4">
+        <div class="bg-gray-100 rounded-lg p-3 flex items-center gap-3">
+          <div class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center">👤</div>
+          <div>
+            <p class="text-sm font-medium">Staff User</p>
+            <p class="text-xs text-gray-500">Staff</p>
+          </div>
+        </div>
+      </div>
+
+      <nav class="px-4 space-y-2 text-sm">
+        <a href="/dashboard" class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100">📊 Dashboard</a>
+        <a href="/inventory" class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100">📦 Inventory</a>
+        <a href="/analytics" class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100">📈 Analytics</a>
+        <a href="/alerts" class="flex items-center gap-2 p-3 rounded-lg bg-blue-600 text-white">🔔 Alerts</a>
+      </nav>
+    </div>
+
+    <div class="p-5 border-t">
+      <a href="/logout" class="text-red-500 text-sm flex items-center gap-2">↩ Logout</a>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="flex-1 overflow-y-auto">
+
+    <!-- TOP BAR -->
+    <div class="bg-white border-b px-6 py-4 flex items-center justify-between">
+      <div class="font-semibold text-gray-800">Alerts & Notifications</div>
+
+      <div class="flex items-center gap-3">
+        <div class="relative">
+          <input
+            class="w-72 border rounded-md px-4 py-2 text-sm bg-gray-50"
+            placeholder="Search products, users..."
+          />
+          <span class="absolute right-3 top-2.5 text-gray-400 text-sm">⌕</span>
+        </div>
+
+        <button class="relative w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
+          🔔
+          <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">5</span>
+        </button>
+
+        <div class="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-medium">S</div>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="p-6">
+
+      <h1 class="text-lg font-semibold text-gray-800">Alerts & Notifications</h1>
+      <p class="text-sm text-gray-500 mt-1">Real-time system alerts and AI-powered insights</p>
+
+      <!-- Tabs -->
+      <div class="mt-4 flex flex-wrap gap-2" id="tabs">
+        <button data-filter="all" class="tab-btn px-3 py-1.5 rounded-md text-xs bg-blue-600 text-white">All (10)</button>
+        <button data-filter="critical" class="tab-btn px-3 py-1.5 rounded-md text-xs bg-gray-100 text-gray-700 hover:bg-gray-200">Critical (3)</button>
+        <button data-filter="warning" class="tab-btn px-3 py-1.5 rounded-md text-xs bg-gray-100 text-gray-700 hover:bg-gray-200">Warnings (2)</button>
+        <button data-filter="info" class="tab-btn px-3 py-1.5 rounded-md text-xs bg-gray-100 text-gray-700 hover:bg-gray-200">Info (2)</button>
+        <button data-filter="ml" class="tab-btn px-3 py-1.5 rounded-md text-xs bg-gray-100 text-gray-700 hover:bg-gray-200">ML Insights (3)</button>
+      </div>
+
+      <!-- Alerts List -->
+      <div class="mt-6 space-y-4" id="alertsList">
+
+        <!-- Critical -->
+        <div class="alert-card bg-white rounded-xl border shadow-sm overflow-hidden" data-type="critical">
+          <div class="flex">
+            <div class="w-1.5 bg-red-500"></div>
+            <div class="p-4 flex-1 bg-red-50/60">
+              <div class="flex justify-between items-start">
+                <div class="flex items-start gap-3">
+                  <div class="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">⛔</div>
+                  <div>
+                    <h3 class="font-semibold text-sm text-red-700">Critical Stock Level</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Product: Cheddar Cheese</p>
+                    <p class="text-sm text-gray-700 mt-2">
+                      Cheddar Cheese is completely out of stock. Immediate reorder required.
+                    </p>
+                    <div class="mt-3 flex gap-2">
+                      <button class="px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white">Reorder Now</button>
+                      <button class="ack-btn px-3 py-1.5 text-xs rounded-md bg-white border">✓ Acknowledge</button>
+                      <button class="px-3 py-1.5 text-xs rounded-md text-gray-500 hover:bg-white/70">✕</button>
+                    </div>
+                  </div>
+                </div>
+                <span class="text-xs text-gray-400">5 mins ago</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Expiry (Critical style in screenshot is red-tint) -->
+        <div class="alert-card bg-white rounded-xl border shadow-sm overflow-hidden" data-type="critical">
+          <div class="flex">
+            <div class="w-1.5 bg-red-400"></div>
+            <div class="p-4 flex-1 bg-red-50/60">
+              <div class="flex justify-between items-start">
+                <div class="flex items-start gap-3">
+                  <div class="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">🗓️</div>
+                  <div>
+                    <h3 class="font-semibold text-sm text-red-700">Expiry Alert</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Product: Greek Yogurt</p>
+                    <p class="text-sm text-gray-700 mt-2">
+                      Greek Yogurt expires in 2 days. 8 units remaining in inventory.
+                    </p>
+                    <div class="mt-3 flex gap-2">
+                      <button class="px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white">Apply Discount</button>
+                      <button class="ack-btn px-3 py-1.5 text-xs rounded-md bg-white border">✓ Acknowledge</button>
+                      <button class="px-3 py-1.5 text-xs rounded-md text-gray-500 hover:bg-white/70">✕</button>
+                    </div>
+                  </div>
+                </div>
+                <span class="text-xs text-gray-400">12 mins ago</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Warning -->
+        <div class="alert-card bg-white rounded-xl border shadow-sm overflow-hidden" data-type="warning">
+          <div class="flex">
+            <div class="w-1.5 bg-amber-400"></div>
+            <div class="p-4 flex-1 bg-amber-50/70">
+              <div class="flex justify-between items-start">
+                <div class="flex items-start gap-3">
+                  <div class="w-9 h-9 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">⚠️</div>
+                  <div>
+                    <h3 class="font-semibold text-sm text-amber-700">Low Stock Alert</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Product: Fresh Bread</p>
+                    <p class="text-sm text-gray-700 mt-2">
+                      Fresh Bread stock level below reorder point. Only 12 units remaining.
+                    </p>
+                    <div class="mt-3 flex gap-2">
+                      <button class="px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white">Review Order</button>
+                      <button class="ack-btn px-3 py-1.5 text-xs rounded-md bg-white border">✓ Acknowledge</button>
+                      <button class="px-3 py-1.5 text-xs rounded-md text-gray-500 hover:bg-white/70">✕</button>
+                    </div>
+                  </div>
+                </div>
+                <span class="text-xs text-gray-400">35 mins ago</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ML Insight -->
+        <div class="alert-card bg-white rounded-xl border shadow-sm overflow-hidden" data-type="ml">
+          <div class="flex">
+            <div class="w-1.5 bg-violet-500"></div>
+            <div class="p-4 flex-1 bg-violet-50/60">
+              <div class="flex justify-between items-start">
+                <div class="flex items-start gap-3">
+                  <div class="w-9 h-9 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center">🤖</div>
+                  <div>
+                    <h3 class="font-semibold text-sm text-violet-700">AI Demand Forecast</h3>
+                    <p class="text-sm text-gray-700 mt-2">
+                      ML model predicts 35% increase in dairy product demand this weekend.
+                    </p>
+                    <div class="mt-3 flex gap-2">
+                      <button class="px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white">View Forecast</button>
+                      <button class="ack-btn px-3 py-1.5 text-xs rounded-md bg-white border">✓ Acknowledge</button>
+                      <button class="px-3 py-1.5 text-xs rounded-md text-gray-500 hover:bg-white/70">✕</button>
+                    </div>
+                  </div>
+                </div>
+                <span class="text-xs text-gray-400">1 hour ago</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Tabs filter
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  const cards = document.querySelectorAll(".alert-card");
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      tabBtns.forEach(b => {
+        b.classList.remove("bg-blue-600","text-white");
+        b.classList.add("bg-gray-100","text-gray-700");
+      });
+      btn.classList.remove("bg-gray-100","text-gray-700");
+      btn.classList.add("bg-blue-600","text-white");
+
+      const filter = btn.dataset.filter;
+      cards.forEach(card => {
+        const t = card.dataset.type;
+        const show = (filter === "all") || (t === filter) || (filter === "info" && t === "info");
+        card.style.display = show ? "" : "none";
+      });
+    });
+  });
+
+  // Acknowledge -> visually mark
+  document.querySelectorAll(".ack-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const card = btn.closest(".alert-card");
+      card.classList.add("opacity-60");
+      btn.textContent = "✓ Acknowledged";
+      btn.disabled = true;
+      btn.classList.add("cursor-not-allowed");
+    });
+  });
+</script>
+
+</body>
+</html>
