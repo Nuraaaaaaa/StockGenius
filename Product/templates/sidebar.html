@@ -1,77 +1,91 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Sidebar</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sidebar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
 
-<body class="bg-gray-100">
-
-<div class="h-screen w-72 bg-gray-100 border-r flex flex-col justify-between">
-
-  <!-- Top Section -->
-  <div>
-
-    <!-- Logo -->
-    <div class="p-6 border-b">
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center text-white">
-          📦
+  <body class="bg-gray-100">
+    <div
+      class="h-screen w-72 bg-gray-100 border-r flex flex-col justify-between"
+    >
+      <!-- Top Section -->
+      <div>
+        <!-- Logo -->
+        <div class="p-6 border-b">
+          <div class="flex items-center gap-3">
+            <div
+              class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center text-white"
+            >
+              📦
+            </div>
+            <span class="font-semibold text-gray-800 text-lg">StockGenius</span>
+          </div>
         </div>
-        <span class="font-semibold text-gray-800 text-lg">StockGenius</span>
+
+        <!-- User Card -->
+        <div class="p-4">
+          <div class="flex items-center gap-3 bg-gray-200 rounded-xl p-3">
+            <div
+              class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white"
+            >
+              👤
+            </div>
+            <div>
+              <p class="font-medium text-gray-800 text-sm">Staff User</p>
+              <p class="text-xs text-gray-500">Staff</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="px-4 space-y-2">
+          <a
+            href="{{ url_for('dashboard') }}"
+            class="flex items-center gap-3 p-3 rounded-lg text-gray-600 hover:bg-gray-200 transition"
+          >
+            <span>📊</span>
+            Dashboard
+          </a>
+
+          <a
+            href="{{ url_for('inventory') }}"
+            class="flex items-center gap-3 p-3 rounded-lg text-gray-600 hover:bg-gray-200 transition"
+          >
+            <span>📦</span>
+            Inventory
+          </a>
+
+          <a
+            href="#"
+            class="flex items-center gap-3 p-3 rounded-lg text-gray-600 hover:bg-gray-200 transition"
+          >
+            <span>📈</span>
+            Analytics
+          </a>
+
+          <!-- Active -->
+          <a
+            href="{{ url_for('alerts') }}"
+            class="flex items-center gap-3 p-3 rounded-lg bg-blue-600 text-white shadow-md"
+          >
+            <span>🔔</span>
+            Alerts
+          </a>
+        </div>
+      </div>
+
+      <!-- Bottom Logout -->
+      <div class="p-6 border-t">
+        <a
+          href="{{ url_for('logout') }}"
+          class="flex items-center gap-2 text-red-500 hover:text-red-600"
+        >
+          <span>↩</span>
+          Logout
+        </a>
       </div>
     </div>
-
-    <!-- User Card -->
-    <div class="p-4">
-      <div class="flex items-center gap-3 bg-gray-200 rounded-xl p-3">
-        <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white">
-          👤
-        </div>
-        <div>
-          <p class="font-medium text-gray-800 text-sm">Staff User</p>
-          <p class="text-xs text-gray-500">Staff</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Navigation -->
-    <div class="px-4 space-y-2">
-
-      <a href="#" class="flex items-center gap-3 p-3 rounded-lg text-gray-600 hover:bg-gray-200 transition">
-        <span>📊</span>
-        Dashboard
-      </a>
-
-      <a href="#" class="flex items-center gap-3 p-3 rounded-lg text-gray-600 hover:bg-gray-200 transition">
-        <span>📦</span>
-        Inventory
-      </a>
-
-      <a href="#" class="flex items-center gap-3 p-3 rounded-lg text-gray-600 hover:bg-gray-200 transition">
-        <span>📈</span>
-        Analytics
-      </a>
-
-      <!-- Active -->
-      <a href="#" class="flex items-center gap-3 p-3 rounded-lg bg-blue-600 text-white shadow-md">
-        <span>🔔</span>
-        Alerts
-      </a>
-
-    </div>
-  </div>
-
-  <!-- Bottom Logout -->
-  <div class="p-6 border-t">
-    <a href="#" class="flex items-center gap-2 text-red-500 hover:text-red-600">
-      <span>↩</span>
-      Logout
-    </a>
-  </div>
-
-</div>
-
-</body>
+  </body>
 </html>
