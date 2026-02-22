@@ -37,7 +37,7 @@ class MySqlConnection(Database):
     def __init__(self):
         self.username = "root"
         self.password = "1436"
-        self.database = "hello"
+        self.database = "stockgenius"
         self.host = "localhost"
         self.port = 3306
 
@@ -51,7 +51,7 @@ class MySqlConnection(Database):
                 database=self.database
             )
             if conn.is_connected():
-                print("successful")
+                print("successful connection to the database")
             else:
                 print("Not connection")
 
