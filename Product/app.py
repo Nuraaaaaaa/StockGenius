@@ -8,7 +8,7 @@ db = MySqlConnection()
 def test():
     conn = db.open_connection()
     try:
-        rows = db.run_query(conn, "SELECT * FROM products LIMIT 5")
+        rows = db.run_query(conn, "SELECT * FROM users LIMIT 5")
         return jsonify(rows)
     finally:
         db.close_connection(conn)
