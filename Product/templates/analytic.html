@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StockGenius • Analytics & Reports</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* subtle dashboard background */
+      .grid-bg {
+        background-image:
+          radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.06) 1px, transparent 0);
+        background-size: 22px 22px;
+      }
+      /* nice scrollbar for the sidebar if needed */
+      .nice-scroll::-webkit-scrollbar { width: 10px; }
+      .nice-scroll::-webkit-scrollbar-thumb { background: rgba(15,23,42,.12); border-radius: 999px; }
+      .nice-scroll::-webkit-scrollbar-track { background: transparent; }
+    </style>
+  </head>
+
+  <body class="min-h-screen bg-slate-50 text-slate-900">
+    <div class="min-h-screen flex">
+      <!-- SIDEBAR -->
+      <aside class="w-64 bg-white border-r border-slate-200 flex flex-col">
+        <!-- Brand -->
+        <div class="px-5 py-4 flex items-center gap-3">
+          <div class="h-9 w-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-sm">
+            <!-- simple box icon -->
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" class="text-white">
+              <path d="M7 8V7a5 5 0 0 1 10 0v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M6 8h12a2 2 0 0 1 2 2v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-9a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2"/>
+              <path d="M9 13h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="leading-tight">
+            <div class="font-semibold">StockGenius</div>
+          </div>
+        </div>
+
+        <!-- User pill -->
+        <div class="px-4">
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center gap-3">
+            <div class="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold">S</div>
+            <div class="min-w-0">
+              <div class="text-sm font-semibold truncate">Staff User</div>
+              <div class="text-xs text-slate-500 truncate">Staff</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nav -->
+        <nav class="mt-4 px-3 flex-1 overflow-auto nice-scroll">
+          <a href="#" class="group flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+            <span class="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-slate-200">
+              <!-- dashboard icon -->
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M4 13h7V4H4v9Zm9 7h7V11h-7v9ZM4 20h7v-5H4v5Zm9-11h7V4h-7v5Z" stroke="currentColor" stroke-width="2"/>
+              </svg>
+            </span>
+            Dashboard
+          </a>
+
+          <a href="#" class="group flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+            <span class="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-slate-200">
+              <!-- inventory icon -->
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M21 8 12 3 3 8v10l9 5 9-5V8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                <path d="M3 8l9 5 9-5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                <path d="M12 13v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </span>
+            Inventory
+          </a>
+
+          <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium bg-blue-600 text-white">
+            <span class="h-8 w-8 rounded-lg bg-white/15 flex items-center justify-center text-white">
+              <!-- analytics icon -->
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M4 19V5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M4 19h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M8 15V10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M12 15V7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M16 15v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </span>
+            Analytics
+          </a>
+
+          <a href="#" class="group flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+            <span class="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-slate-200">
+              <!-- alert icon -->
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M12 22a2.5 2.5 0 0 0 2.5-2.5h-5A2.5 2.5 0 0 0 12 22Z" fill="currentColor" opacity=".25"/>
+                <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 7h18s-3 0-3-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            Alerts
+          </a>
+        </nav>
+
+        <!-- Logout -->
+        <div class="p-4">
+          <button class="w-full flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M10 7V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M15 12H3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M6 9l-3 3 3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      <!-- MAIN -->
+      <main class="flex-1 min-w-0">
+        <!-- Top bar -->
+        <header class="bg-white border-b border-slate-200">
+          <div class="px-6 py-4 flex items-center justify-between gap-4">
+            <div>
+              <h1 class="text-lg font-semibold">Analytics & Reports</h1>
+              <p class="text-xs text-slate-500">Comprehensive insights and data analysis</p>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <!-- Search -->
+              <div class="relative hidden md:block">
+                <span class="absolute inset-y-0 left-3 flex items-center text-slate-400">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" stroke-width="2"/>
+                  </svg>
+                </span>
+                <input
+                  class="w-64 h-9 rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                  placeholder="Search products, users..."
+                />
+              </div>
+
+              <!-- Bell -->
+              <button class="h-9 w-9 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-slate-50 relative">
+                <span class="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center">3</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 22a2.5 2.5 0 0 0 2.5-2.5h-5A2.5 2.5 0 0 0 12 22Z" fill="currentColor" opacity=".2"/>
+                  <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 7h18s-3 0-3-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                </svg>
+              </button>
+
+              <!-- Avatar -->
+              <div class="h-9 w-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-semibold text-sm">S</div>
+            </div>
+          </div>
+        </header>
+
+        <!-- Content -->
+        <section class="px-6 py-5">
+          <!-- toolbar -->
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="text-sm font-semibold">Analytics & Reports</div>
+            </div>
+
+            <div class="flex items-center gap-2 flex-wrap">
+              <button class="h-9 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M7 3v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M17 3v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M4 8h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M6 5h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2"/>
+                </svg>
+                Date Range
+              </button>
+
+              <button class="h-9 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M4 6h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M7 12h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M10 18h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                Filters
+              </button>
+
+              <button class="h-9 px-3 rounded-xl bg-blue-600 text-white text-sm hover:bg-blue-700 active:bg-blue-800 flex items-center gap-2 shadow-sm">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3v10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M8 9l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                Export Report
+              </button>
+            </div>
+          </div>
+
+          <!-- tabs -->
+          <div class="mt-4 border-b border-slate-200">
+            <div class="flex items-center gap-6 text-sm">
+              <button class="py-3 border-b-2 border-blue-600 text-blue-600 font-medium">Sales Reports</button>
+              <button class="py-3 text-slate-500 hover:text-slate-700">Inventory Reports</button>
+              <button class="py-3 text-slate-500 hover:text-slate-700">Waste Reports</button>
+              <button class="py-3 text-slate-500 hover:text-slate-700">Prediction Reports</button>
+            </div>
+          </div>
+
+          <!-- grid -->
+          <div class="mt-5 grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <!-- Revenue over time -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <div class="flex items-start justify-between">
+                <div>
+                  <div class="text-sm font-semibold">Revenue Over Time</div>
+                  <div class="text-xs text-slate-500">Daily revenue trend • January 2026</div>
+                </div>
+              </div>
+
+              <div class="mt-3 grid-bg rounded-xl border border-slate-100 p-3">
+                <!-- Simple SVG line chart (static) -->
+                <svg viewBox="0 0 640 220" class="w-full h-[220px]">
+                  <!-- grid lines -->
+                  <g opacity=".35">
+                    <line x1="50" y1="20" x2="50" y2="190" stroke="rgba(15,23,42,.2)"/>
+                    <line x1="50" y1="190" x2="610" y2="190" stroke="rgba(15,23,42,.2)"/>
+                    <line x1="50" y1="155" x2="610" y2="155" stroke="rgba(15,23,42,.12)"/>
+                    <line x1="50" y1="120" x2="610" y2="120" stroke="rgba(15,23,42,.12)"/>
+                    <line x1="50" y1="85" x2="610" y2="85" stroke="rgba(15,23,42,.12)"/>
+                    <line x1="50" y1="50" x2="610" y2="50" stroke="rgba(15,23,42,.12)"/>
+                  </g>
+
+                  <!-- y labels -->
+                  <g font-size="10" fill="rgba(15,23,42,.55)">
+                    <text x="10" y="193">0</text>
+                    <text x="10" y="158">5,500</text>
+                    <text x="10" y="123">11,000</text>
+                    <text x="10" y="88">16,500</text>
+                    <text x="10" y="53">22,000</text>
+                  </g>
+
+                  <!-- x labels -->
+                  <g font-size="10" fill="rgba(15,23,42,.55)">
+                    <text x="50" y="212">2026-01-01</text>
+                    <text x="205" y="212">2026-01-10</text>
+                    <text x="360" y="212">2026-01-20</text>
+                    <text x="520" y="212">2026-01-29</text>
+                  </g>
+
+                  <!-- line -->
+                  <path
+                    d="M50,130
+                       C110,80 150,75 195,95
+                       C240,115 275,105 315,70
+                       C360,30 410,55 445,75
+                       C480,95 510,40 560,35
+                       C595,32 605,45 610,50"
+                    fill="none"
+                    stroke="#22c55e"
+                    stroke-width="4"
+                    stroke-linecap="round"
+                  />
+
+                  <!-- points -->
+                  <g fill="#22c55e">
+                    <circle cx="50" cy="130" r="4"/>
+                    <circle cx="195" cy="95" r="4"/>
+                    <circle cx="315" cy="70" r="4"/>
+                    <circle cx="445" cy="75" r="4"/>
+                    <circle cx="560" cy="35" r="4"/>
+                    <circle cx="610" cy="50" r="4"/>
+                  </g>
+                </svg>
+              </div>
+            </div>
+
+            <!-- Sales by category -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <div class="flex items-start justify-between">
+                <div>
+                  <div class="text-sm font-semibold">Sales by Category</div>
+                  <div class="text-xs text-slate-500">Distribution across product categories</div>
+                </div>
+              </div>
+
+              <div class="mt-3 grid-bg rounded-xl border border-slate-100 p-3 flex items-center justify-center">
+                <!-- Simple SVG pie chart (static) -->
+                <svg viewBox="0 0 220 220" class="w-[260px] max-w-full h-[220px]">
+                  <!-- base -->
+                  <circle cx="110" cy="110" r="78" fill="#e2e8f0"/>
+                  <!-- slices -->
+                  <!-- slice 1 -->
+                  <path d="M110 110 L110 32 A78 78 0 0 1 183 135 Z" fill="#3b82f6"/>
+                  <!-- slice 2 -->
+                  <path d="M110 110 L183 135 A78 78 0 0 1 139 186 Z" fill="#a855f7"/>
+                  <!-- slice 3 -->
+                  <path d="M110 110 L139 186 A78 78 0 0 1 56 174 Z" fill="#ef4444"/>
+                  <!-- slice 4 -->
+                  <path d="M110 110 L56 174 A78 78 0 0 1 32 98 Z" fill="#f59e0b"/>
+                  <!-- slice 5 -->
+                  <path d="M110 110 L32 98 A78 78 0 0 1 110 32 Z" fill="#10b981"/>
+
+                  <!-- donut hole (optional) -->
+                  <circle cx="110" cy="110" r="38" fill="white"/>
+
+                  <!-- small legend -->
+                  <g font-size="10" fill="rgba(15,23,42,.75)">
+                    <rect x="10" y="10" width="10" height="10" fill="#3b82f6"/><text x="26" y="19">Dairy</text>
+                    <rect x="10" y="28" width="10" height="10" fill="#10b981"/><text x="26" y="37">Produce</text>
+                    <rect x="10" y="46" width="10" height="10" fill="#f59e0b"/><text x="26" y="55">Bakery</text>
+                    <rect x="10" y="64" width="10" height="10" fill="#ef4444"/><text x="26" y="73">Snacks</text>
+                    <rect x="10" y="82" width="10" height="10" fill="#a855f7"/><text x="26" y="91">Beverages</text>
+                  </g>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- KPI cards -->
+          <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <div class="text-xs text-slate-500">Total Revenue</div>
+              <div class="mt-1 text-2xl font-semibold">$127,500</div>
+              <div class="mt-2 text-xs text-emerald-600 flex items-center gap-1">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 15l4-4 3 3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M18 7h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                15.3% from last month
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <div class="text-xs text-slate-500">Total Transactions</div>
+              <div class="mt-1 text-2xl font-semibold">8,432</div>
+              <div class="mt-2 text-xs text-emerald-600 flex items-center gap-1">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 15l4-4 3 3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M18 7h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                8.7% from last month
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <div class="text-xs text-slate-500">Average Order Value</div>
+              <div class="mt-1 text-2xl font-semibold">$15.12</div>
+              <div class="mt-2 text-xs text-emerald-600 flex items-center gap-1">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 15l4-4 3 3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M18 7h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                3.2% from last month
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+              <div class="text-xs text-slate-500">Top Category</div>
+              <div class="mt-1 text-2xl font-semibold">Dairy</div>
+              <div class="mt-2 text-xs text-slate-500">23% of total sales</div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
