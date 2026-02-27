@@ -1,4 +1,4 @@
-from flask import Flask, render_template ,  redirect,  url_for, jsonify
+from flask import Flask, render_template ,  redirect,  url_for, jsonify, request
 from database.database import MySqlConnection
 from werkzeug.security import generate_password_hash
 app = Flask(__name__)
@@ -37,6 +37,10 @@ def alerts():
 def logout():
   
     return redirect(url_for("login"))
+
+@app.route("/signup")
+def signup_page():
+    return render_template("signup.html")
 
 @app.post("/api/signup")
 def signup():
