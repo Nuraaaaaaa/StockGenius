@@ -1,175 +1,513 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Dashboard</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/dashboard.css') }}"
+    />
+  </head>
 
-<body class="bg-gray-100">
+  <body class="bg-slate-50 text-slate-900 min-h-screen">
+    <div class="flex h-screen">
+      <!-- SIDEBAR -->
+      <aside class="w-64 bg-white border-r flex flex-col justify-between">
+        <div>
+          <div class="p-5 border-b flex items-center gap-2">
+            <div
+              class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center"
+            >
+              📦
+            </div>
+            <span class="font-semibold">StockGenius</span>
+          </div>
 
-<div class="flex h-screen">
+          <div class="p-4">
+            <div class="bg-gray-100 rounded-lg p-3 flex items-center gap-3">
+              <div
+                class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center"
+              >
+                👤
+              </div>
+              <div>
+                <p class="text-sm font-medium">Staff User</p>
+                <p class="text-xs text-gray-500">Staff</p>
+              </div>
+            </div>
+          </div>
 
-  <!-- SIDEBAR -->
-  <aside class="w-64 bg-white border-r flex flex-col justify-between">
-    <div>
-      <div class="p-5 border-b flex items-center gap-2">
-        <div class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center">📦</div>
-        <span class="font-semibold">StockGenius</span>
-      </div>
+          <nav class="px-4 space-y-2 text-sm">
+            <a
+              class="flex items-center gap-2 p-3 rounded-lg bg-blue-600 text-white"
+              >📊 Dashboard</a
+            >
+            <a class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100"
+              >📦 Inventory</a
+            >
+            <a class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100"
+              >📈 Analytics</a
+            >
+            <a class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100"
+              >🔔 Alerts</a
+            >
+          </nav>
+        </div>
 
-      <div class="p-4">
-        <div class="bg-gray-100 rounded-lg p-3 flex items-center gap-3">
-          <div class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center">👤</div>
+        <div class="p-5 border-t">
+          <a class="text-red-500 text-sm">↩ Logout</a>
+        </div>
+      </aside>
+      <main class="flex-1 overflow-y-auto">
+        <header
+          class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10"
+        >
           <div>
-            <p class="text-sm font-medium">Staff User</p>
-            <p class="text-xs text-gray-500">Staff</p>
+            <h1 class="text-lg font-semibold text-slate-800">Dashboard</h1>
+            <p class="text-xs text-slate-400" id="lastUpdated">Loading…</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="relative">
+              <input
+                class="w-64 h-9 rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                placeholder="Search products, users…"
+              />
+              <svg
+                class="absolute left-3 top-2.5 text-slate-400"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <path
+                  d="M21 21l-4.3-4.3"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+              </svg>
+            </div>
+            <a
+              href="{{ url_for('alerts') }}"
+              class="relative h-9 w-9 rounded-xl border border-slate-200 bg-white flex items-center justify-center hover:bg-slate-50"
+            >
+              <span
+                id="alertBadge"
+                class="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-white text-[10px] hidden items-center justify-center font-medium"
+                >0</span
+              >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 7h18s-3 0-3-7Z"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M12 22a2.5 2.5 0 0 0 2.5-2.5h-5A2.5 2.5 0 0 0 12 22Z"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+              </svg>
+            </a>
+            <div
+              class="h-9 w-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-semibold text-sm"
+            >
+              {{ session.get('user_name', 'S')[0].upper() }}
+            </div>
+          </div>
+        </header>
+
+        <div class="p-6 space-y-5">
+          <!-- ML source banner -->
+          <div
+            class="bg-gradient-to-r from-violet-50 to-blue-50 border border-violet-100 rounded-2xl px-5 py-3 flex items-center gap-3"
+          >
+            <div
+              class="h-7 w-7 rounded-lg bg-violet-100 flex items-center justify-center shrink-0"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                class="text-violet-600"
+              >
+                <path
+                  d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2Z"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+                <path
+                  d="M12 8v4l3 3"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </div>
+            <p class="text-xs text-violet-700 font-medium">
+              Powered by ML enriched dataset (9,994 transactions) &nbsp;·&nbsp;
+              <span class="text-blue-600">Random Forest</span> ·
+              <span class="text-violet-600">ARIMA(2,1,2)</span> ·
+              <span class="text-red-500">Isolation Forest</span>
+            </p>
+          </div>
+
+          <!-- ── KPI CARDS ─────────────────────────────────────────── -->
+          <div class="grid grid-cols-2 xl:grid-cols-5 gap-4">
+            <div
+              class="stat-card bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <span
+                  class="text-[11px] font-medium text-slate-400 uppercase tracking-wide"
+                  >Sub-Categories</span
+                >
+                <div
+                  class="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    class="text-blue-600"
+                  >
+                    <path
+                      d="M21 8 12 3 3 8v10l9 5 9-5V8Z"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </div>
+              </div>
+              <div class="text-2xl font-bold text-slate-800" id="statProducts">
+                <div class="skeleton h-7 w-12"></div>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">Unique product types</p>
+            </div>
+
+            <div
+              class="stat-card bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <span
+                  class="text-[11px] font-medium text-slate-400 uppercase tracking-wide"
+                  >Low Stock</span
+                >
+                <div
+                  class="h-8 w-8 rounded-lg bg-amber-50 flex items-center justify-center"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    class="text-amber-500"
+                  >
+                    <path
+                      d="M12 9v4"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    />
+                    <path
+                      d="M12 17h.01"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    />
+                    <path
+                      d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </div>
+              </div>
+              <div class="text-2xl font-bold text-slate-800" id="statLowStock">
+                <div class="skeleton h-7 w-10"></div>
+              </div>
+              <p class="text-xs text-amber-500 mt-1">ML Low_Stock = 1</p>
+            </div>
+
+            <div
+              class="stat-card bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <span
+                  class="text-[11px] font-medium text-slate-400 uppercase tracking-wide"
+                  >Near Expiry</span
+                >
+                <div
+                  class="h-8 w-8 rounded-lg bg-red-50 flex items-center justify-center"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    class="text-red-500"
+                  >
+                    <path
+                      d="M8 2v4"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    />
+                    <path
+                      d="M16 2v4"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    />
+                    <path d="M3 10h18" stroke="currentColor" stroke-width="2" />
+                    <rect
+                      x="3"
+                      y="4"
+                      width="18"
+                      height="18"
+                      rx="2"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    />
+                  </svg>
+                </div>
+              </div>
+              <div
+                class="text-2xl font-bold text-slate-800"
+                id="statNearExpiry"
+              >
+                <div class="skeleton h-7 w-10"></div>
+              </div>
+              <p class="text-xs text-red-500 mt-1">Days_To_Expiry &lt; 30</p>
+            </div>
+
+            <div
+              class="stat-card bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <span
+                  class="text-[11px] font-medium text-slate-400 uppercase tracking-wide"
+                  >Anomalies</span
+                >
+                <div
+                  class="h-8 w-8 rounded-lg bg-violet-50 flex items-center justify-center"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    class="text-violet-600"
+                  >
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M12 8v4"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    />
+                    <path
+                      d="M12 16h.01"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </div>
+              </div>
+              <div class="text-2xl font-bold text-slate-800" id="statAnomalies">
+                <div class="skeleton h-7 w-12"></div>
+              </div>
+              <p class="text-xs text-violet-500 mt-1">Isolation Forest (5%)</p>
+            </div>
+
+            <div
+              class="stat-card bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <span
+                  class="text-[11px] font-medium text-slate-400 uppercase tracking-wide"
+                  >Total Sales</span
+                >
+                <div
+                  class="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    class="text-emerald-600"
+                  >
+                    <path
+                      d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </div>
+              </div>
+              <div class="text-2xl font-bold text-slate-800" id="statSales">
+                <div class="skeleton h-7 w-20"></div>
+              </div>
+              <p class="text-xs text-emerald-600 mt-1">9,994 transactions</p>
+            </div>
+          </div>
+
+          <!-- ── CHARTS ROW ─────────────────────────────────────────── -->
+          <div class="grid grid-cols-1 xl:grid-cols-5 gap-4">
+            <!-- ARIMA Line Chart -->
+            <div
+              class="xl:col-span-3 bg-white rounded-2xl border border-slate-200 shadow-sm p-5"
+            >
+              <div class="flex items-center justify-between mb-1">
+                <div>
+                  <h3 class="text-sm font-semibold text-slate-800">
+                    Monthly Sales + ARIMA Forecast
+                  </h3>
+                  <p class="text-xs text-slate-400">
+                    ARIMA(2,1,2) · AIC 949.09 · Forecast Accuracy 64.8%
+                  </p>
+                </div>
+                <div class="flex items-center gap-3 text-[11px] text-slate-400">
+                  <span class="flex items-center gap-1"
+                    ><span
+                      class="w-5 h-0.5 bg-blue-500 inline-block rounded"
+                    ></span
+                    >Actual</span
+                  >
+                  <span class="flex items-center gap-1"
+                    ><span
+                      class="w-5 inline-block"
+                      style="border-top: 2px dashed #7c3aed"
+                    ></span
+                    >Forecast</span
+                  >
+                </div>
+              </div>
+              <div
+                id="lineChartSkeleton"
+                class="skeleton h-56 w-full rounded-xl mt-3"
+              ></div>
+              <canvas id="lineChart" class="hidden mt-3" height="140"></canvas>
+            </div>
+
+            <!-- Random Forest Bar Chart -->
+            <div
+              class="xl:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-5"
+            >
+              <div class="mb-1">
+                <h3 class="text-sm font-semibold text-slate-800">
+                  Demand by Sub-Category
+                </h3>
+                <p class="text-xs text-slate-400">
+                  Total Quantity · Random Forest target variable
+                </p>
+              </div>
+              <div
+                id="barChartSkeleton"
+                class="skeleton h-56 w-full rounded-xl mt-3"
+              ></div>
+              <canvas id="barChart" class="hidden mt-3" height="230"></canvas>
+            </div>
+          </div>
+
+          <!-- ── PROFIT MARGIN CHART ────────────────────────────────── -->
+          <div
+            class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5"
+          >
+            <div class="mb-3">
+              <h3 class="text-sm font-semibold text-slate-800">
+                Profit Margin % by Sub-Category
+              </h3>
+              <p class="text-xs text-slate-400">
+                Negative margin items: Tables (−8.56%), Bookcases (−3.02%),
+                Supplies (−2.55%) · Source: ML EDA Section 3
+              </p>
+            </div>
+            <div
+              id="marginChartSkeleton"
+              class="skeleton h-52 w-full rounded-xl"
+            ></div>
+            <canvas id="marginChart" class="hidden" height="180"></canvas>
+          </div>
+
+          <!-- ── ML ALERT TABLE ─────────────────────────────────────── -->
+          <div
+            class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5"
+          >
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h3 class="text-sm font-semibold text-slate-800">
+                  ML Alert Feed
+                </h3>
+                <p class="text-xs text-slate-400">
+                  Isolation Forest anomalies · Low_Stock=1 · Near_Expiry=1
+                </p>
+              </div>
+              <a
+                href="{{ url_for('alerts') }}"
+                class="text-xs text-blue-600 hover:underline font-medium"
+                >View all →</a
+              >
+            </div>
+
+            <div id="tableSkeleton" class="space-y-2">
+              <div class="skeleton h-9 w-full rounded-lg"></div>
+              <div class="skeleton h-9 w-full rounded-lg"></div>
+              <div class="skeleton h-9 w-5/6 rounded-lg"></div>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm hidden" id="alertTable">
+                <thead>
+                  <tr
+                    class="text-xs text-slate-400 font-medium border-b border-slate-100"
+                  >
+                    <th class="text-left pb-3 pr-4">Alert Type</th>
+                    <th class="text-left pb-3 pr-4">Sub-Category</th>
+                    <th class="text-left pb-3 pr-4">State / Region</th>
+                    <th class="text-left pb-3 pr-4">Sales</th>
+                    <th class="text-left pb-3 pr-4">Discount</th>
+                    <th class="text-left pb-3 pr-4">Profit</th>
+                    <th class="text-left pb-3 pr-4">Stock Level</th>
+                    <th class="text-left pb-3">Severity</th>
+                  </tr>
+                </thead>
+                <tbody id="alertBody" class="divide-y divide-slate-50"></tbody>
+              </table>
+            </div>
+            <div
+              id="alertEmpty"
+              class="hidden text-center py-8 text-slate-400 text-sm"
+            >
+              No alerts in dataset.
+            </div>
           </div>
         </div>
-      </div>
-
-      <nav class="px-4 space-y-2 text-sm">
-        <a class="flex items-center gap-2 p-3 rounded-lg bg-blue-600 text-white">📊 Dashboard</a>
-        <a class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100">📦 Inventory</a>
-        <a class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100">📈 Analytics</a>
-        <a class="flex items-center gap-2 p-3 rounded-lg hover:bg-gray-100">🔔 Alerts</a>
-      </nav>
+      </main>
     </div>
 
-    <div class="p-5 border-t">
-      <a class="text-red-500 text-sm">↩ Logout</a>
-    </div>
-  </aside>
-
-  <!-- MAIN CONTENT -->
-  <main class="flex-1 p-6 overflow-y-auto">
-
-    <!-- Top -->
-    <div class="flex justify-between items-center mb-6">
-      <h1 class="text-xl font-semibold">Dashboard</h1>
-      <input class="border px-4 py-2 rounded-md text-sm w-64" placeholder="Search products, users...">
-    </div>
-
-    <!-- STATS CARDS -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6">
-
-      <div class="bg-white p-5 rounded-xl shadow-sm">
-        <p class="text-sm text-gray-500">Total Products</p>
-        <h2 class="text-2xl font-semibold mt-2">2,547</h2>
-        <p class="text-green-500 text-xs mt-1">▲ 12% vs last month</p>
-      </div>
-
-      <div class="bg-white p-5 rounded-xl shadow-sm">
-        <p class="text-sm text-gray-500">Low Stock Items</p>
-        <h2 class="text-2xl font-semibold mt-2">23</h2>
-        <p class="text-red-500 text-xs mt-1">▼ 8% vs last month</p>
-      </div>
-
-      <div class="bg-white p-5 rounded-xl shadow-sm">
-        <p class="text-sm text-gray-500">Near Expiry</p>
-        <h2 class="text-2xl font-semibold mt-2">8</h2>
-        <p class="text-red-500 text-xs mt-1">▼ 15% vs last month</p>
-      </div>
-
-      <div class="bg-white p-5 rounded-xl shadow-sm">
-        <p class="text-sm text-gray-500">Revenue (MTD)</p>
-        <h2 class="text-2xl font-semibold mt-2">$67,420</h2>
-        <p class="text-green-500 text-xs mt-1">▲ 18% vs last month</p>
-      </div>
-
-    </div>
-
-    <!-- CHARTS -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
-
-      <div class="bg-white p-5 rounded-xl shadow-sm">
-        <h3 class="text-sm font-medium mb-4">Sales Trend</h3>
-        <canvas id="lineChart"></canvas>
-      </div>
-
-      <div class="bg-white p-5 rounded-xl shadow-sm">
-        <h3 class="text-sm font-medium mb-4">Top Products</h3>
-        <canvas id="barChart"></canvas>
-      </div>
-
-    </div>
-
-    <!-- RECENT ACTIVITIES -->
-    <div class="bg-white p-5 rounded-xl shadow-sm">
-      <h3 class="text-sm font-medium mb-4">Recent Activities</h3>
-
-      <table class="w-full text-sm">
-        <thead class="text-gray-500 border-b">
-          <tr>
-            <th class="py-2 text-left">Time</th>
-            <th class="py-2 text-left">Action</th>
-            <th class="py-2 text-left">Product</th>
-            <th class="py-2 text-left">User</th>
-            <th class="py-2 text-left">Quantity</th>
-            <th class="py-2 text-left">Status</th>
-          </tr>
-        </thead>
-        <tbody class="text-gray-700">
-          <tr class="border-b">
-            <td class="py-2">2 mins ago</td>
-            <td>Stock Updated</td>
-            <td>Whole Milk 1L</td>
-            <td>John Doe</td>
-            <td>+50</td>
-            <td><span class="bg-green-100 text-green-600 px-2 py-1 rounded text-xs">Success</span></td>
-          </tr>
-          <tr>
-            <td class="py-2">15 mins ago</td>
-            <td>Low Stock Alert</td>
-            <td>Fresh Bread</td>
-            <td>System</td>
-            <td>12</td>
-            <td><span class="bg-yellow-100 text-yellow-600 px-2 py-1 rounded text-xs">Warning</span></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-  </main>
-</div>
-
-<script>
-  // Line Chart
-  new Chart(document.getElementById("lineChart"), {
-    type: 'line',
-    data: {
-      labels: ['Jan','Feb','Mar','Apr','May','Jun'],
-      datasets: [
-        {
-          label: 'Actual Sales',
-          data: [45000,52000,49000,60000,58000,65000],
-          borderColor: '#2563eb',
-          fill: false
-        },
-        {
-          label: 'AI Forecast',
-          data: [43000,50000,51000,59000,60000,62000],
-          borderColor: '#8b5cf6',
-          borderDash: [5,5],
-          fill: false
-        }
-      ]
-    }
-  });
-
-  // Bar Chart
-  new Chart(document.getElementById("barChart"), {
-    type: 'bar',
-    data: {
-      labels: ['Milk','Bread','Eggs','Cheese','Butter'],
-      datasets: [{
-        data: [4500,3800,3100,2800,2400],
-        backgroundColor: '#10b981'
-      }]
-    }
-  });
-</script>
-
-</body>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+  </body>
 </html>
