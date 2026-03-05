@@ -33,7 +33,9 @@
               👤
             </div>
             <div>
-              <p class="font-medium text-gray-800 text-sm">Staff User</p>
+              <p class="font-medium text-gray-800 text-sm">
+                {{ session.get('user_name', 'Staff User') }}
+              </p>
               <p class="text-xs text-gray-500">Staff</p>
             </div>
           </div>
@@ -43,7 +45,7 @@
         <div class="px-4 space-y-2">
           <a
             href="{{ url_for('dashboard') }}"
-            class="flex items-center gap-3 p-3 rounded-lg text-gray-600 hover:bg-gray-200 transition"
+            class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'dashboard' %} bg-blue-600 text-white shadow-md {% else %} text-gray-600 hover:bg-gray-200 {% endif %}"
           >
             <span>📊</span>
             Dashboard
@@ -51,15 +53,15 @@
 
           <a
             href="{{ url_for('inventory') }}"
-            class="flex items-center gap-3 p-3 rounded-lg text-gray-600 hover:bg-gray-200 transition"
+            class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'inventory' %} bg-blue-600 text-white shadow-md {% else %} text-gray-600 hover:bg-gray-200 {% endif %}"
           >
             <span>📦</span>
             Inventory
           </a>
 
           <a
-            href="#"
-            class="flex items-center gap-3 p-3 rounded-lg text-gray-600 hover:bg-gray-200 transition"
+            href="{{ url_for('analytic') }}"
+            class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'analytic' %} bg-blue-600 text-white shadow-md {% else %} text-gray-600 hover:bg-gray-200 {% endif %}"
           >
             <span>📈</span>
             Analytics
@@ -68,7 +70,7 @@
           <!-- Active -->
           <a
             href="{{ url_for('alerts') }}"
-            class="flex items-center gap-3 p-3 rounded-lg bg-blue-600 text-white shadow-md"
+            class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'alerts' %} bg-blue-600 text-white shadow-md {% else %} text-gray-600 hover:bg-gray-200 {% endif %}"
           >
             <span>🔔</span>
             Alerts

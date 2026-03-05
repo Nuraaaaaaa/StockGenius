@@ -37,15 +37,19 @@ def login():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    return render_template("dashboard.html")
+    return render_template("dashboard.html", active_page="dashboard")
 
 @app.route("/inventory")
 def inventory():
-    return render_template("inventory.html")
+    return render_template("inventory.html", active_page="inventory")
 
 @app.route("/alerts")
 def alerts():
-    return render_template("alert.html")
+    return render_template("alert.html", active_page="alerts")
+
+@app.route("/analytics")
+def analytic():
+    return render_template("analytic.html", active_page="analytic")
 
 @app.route("/logout")
 def logout():
