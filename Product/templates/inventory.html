@@ -44,90 +44,114 @@
         </div>
 
         <!-- PRODUCTS GRID -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          <!-- CARD -->
-          <div class="bg-white rounded-xl shadow-sm p-4">
-            <img
-              src="https://via.placeholder.com/300x160"
-              class="rounded-lg mb-3"
-            />
-            <h3 class="font-medium">Whole Milk 1L</h3>
-            <p class="text-xs text-gray-500 mb-2">SKU: DRY-001</p>
-            <div class="flex justify-between items-center mb-2">
-              <span class="font-semibold">$3.99</span>
-              <span
-                class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded"
-                >High Stock</span
-              >
-            </div>
-            <button
-              class="w-full bg-blue-600 text-white text-sm py-2 rounded-md"
-            >
-              Edit
-            </button>
-          </div>
+       
+         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+  {% if products %}
+    {% for product in products %}
+    <div class="bg-white rounded-2xl shadow-sm border p-4">
+     <img
+  src="{{ product.image }}"
+  class="rounded-lg mb-3 w-full h-40 object-cover"
+/>
 
-          <div class="bg-white rounded-xl shadow-sm p-4">
-            <img
-              src="https://via.placeholder.com/300x160"
-              class="rounded-lg mb-3"
-            />
-            <h3 class="font-medium">Fresh Bread</h3>
-            <p class="text-xs text-gray-500 mb-2">SKU: BAK-002</p>
-            <div class="flex justify-between items-center mb-2">
-              <span class="font-semibold">$2.49</span>
-              <span
-                class="text-xs bg-yellow-100 text-yellow-600 px-2 py-1 rounded"
-                >Low Stock</span
-              >
-            </div>
-            <button
-              class="w-full bg-blue-600 text-white text-sm py-2 rounded-md"
-            >
-              Edit
-            </button>
-          </div>
+      <h3 class="font-semibold text-lg text-gray-800">
+        {{ product.sub_category }}
+      </h3>
 
-          <div class="bg-white rounded-xl shadow-sm p-4">
-            <img
-              src="https://via.placeholder.com/300x160"
-              class="rounded-lg mb-3"
-            />
-            <h3 class="font-medium">Organic Eggs (12)</h3>
-            <p class="text-xs text-gray-500 mb-2">SKU: DRY-003</p>
-            <div class="flex justify-between items-center mb-2">
-              <span class="font-semibold">$5.99</span>
-              <span
-                class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded"
-                >In Stock</span
-              >
-            </div>
-            <button
-              class="w-full bg-blue-600 text-white text-sm py-2 rounded-md"
-            >
-              Edit
-            </button>
-          </div>
+      <p class="text-xs text-gray-500 mb-3">
+        {{ product.region }}, {{ product.state }}
+      </p>
 
-          <div class="bg-white rounded-xl shadow-sm p-4">
-            <img
-              src="https://via.placeholder.com/300x160"
-              class="rounded-lg mb-3"
-            />
-            <h3 class="font-medium">Greek Yogurt</h3>
-            <p class="text-xs text-gray-500 mb-2">SKU: DRY-004</p>
-            <div class="flex justify-between items-center mb-2">
-              <span class="font-semibold">$4.49</span>
-              <span class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded"
-                >Low Stock</span
-              >
-            </div>
-            <button
-              class="w-full bg-blue-600 text-white text-sm py-2 rounded-md"
-            >
-              Edit
-            </button>
-          </div>
+      <!-- Stock Progress -->
+      <div class="mb-2 flex justify-between text-sm">
+        <span class="text-gray-600">
+          {{ product.avg_stock_level|int }} / {{ product.avg_reorder_point|int }}
+        </span>
+
+        {% if product.low_stock == 1 %}
+          <span class="text-red-500 font-medium">Low Stock</span>
+        {% elif product.near_expiry == 1 %}
+          <span class="text-yellow-500 font-medium">Near Expiry</span>
+        {% else %}
+          <span class="text-green-500 font-medium">High Stock</span>
+        {% endif %}
+      </div>
+
+      <div class="w-full bg-gray-200 rounded-full h-2 mb-4">
+        {% set progress = (product.avg_stock_level / product.avg_reorder_point * 100) if product.avg_reorder_point and product.avg_reorder_point > 0 else 100 %}
+        <div
+          class="h-2 rounded-full
+          {% if product.low_stock == 1 %}
+            bg-red-500
+          {% elif product.near_expiry == 1 %}
+            bg-yellow-500
+          {% else %}
+            bg-green-500
+          {% endif %}"
+          style="width: {{ 100 if progress > 100 else progress }}%;"
+        ></div>
+      </div>
+
+      <div class="flex justify-between items-center mb-3">
+        <span class="text-2xl font-bold text-gray-800">
+          ${{ product.total_sales }}
+        </span>
+
+        {% if product.low_stock == 1 %}
+          <span class="text-xs bg-red-100 text-red-600 px-3 py-1 rounded-lg">Low Stock</span>
+        {% elif product.near_expiry == 1 %}
+          <span class="text-xs bg-yellow-100 text-yellow-600 px-3 py-1 rounded-lg">Near Expiry</span>
+        {% else %}
+          <span class="text-xs bg-green-100 text-green-600 px-3 py-1 rounded-lg">In Stock</span>
+        {% endif %}
+      </div>
+
+      <div class="text-sm text-gray-600 space-y-1 mb-4">
+        <p><strong>Qty:</strong> {{ product.total_quantity }}</p>
+        <p><strong>Profit:</strong> ${{ product.total_profit }}</p>
+        <p><strong>Avg Discount:</strong> {{ product.avg_discount }}%</p>
+      </div>
+
+      <div class="flex gap-2">
+        <button class="flex-1 bg-blue-600 text-white py-2 rounded-xl text-sm font-medium">
+          Edit
+        </button>
+        <button class="w-10 h-10 border rounded-xl text-gray-500">👁</button>
+        <button class="w-10 h-10 border rounded-xl text-gray-500">🗑</button>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="text-gray-500">No inventory data found.</p>
+  {% endif %}
+</div>
+<div class="mt-8 flex justify-center items-center gap-2">
+  {% if page > 1 %}
+    <a href="{{ url_for('inventory', page=page-1) }}"
+       class="px-4 py-2 border rounded-lg bg-white hover:bg-gray-100 text-sm">
+      Previous
+    </a>
+  {% endif %}
+
+  {% for p in range(1, total_pages + 1) %}
+    <a href="{{ url_for('inventory', page=p) }}"
+       class="px-4 py-2 rounded-lg text-sm
+       {% if p == page %}
+         bg-blue-600 text-white
+       {% else %}
+         border bg-white hover:bg-gray-100
+       {% endif %}">
+      {{ p }}
+    </a>
+  {% endfor %}
+
+  {% if page < total_pages %}
+    <a href="{{ url_for('inventory', page=page+1) }}"
+       class="px-4 py-2 border rounded-lg bg-white hover:bg-gray-100 text-sm">
+      Next
+    </a>
+  {% endif %}
+</div>
         </div>
       </main>
     </div>

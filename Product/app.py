@@ -40,8 +40,79 @@ def dashboard():
     return render_template("dashboard.html", active_page="dashboard")
 
 @app.route("/inventory")
+@login_required
 def inventory():
-    return render_template("inventory.html", active_page="inventory")
+    page = request.args.get("page", 1, type=int)
+    per_page = 8
+    offset = (page - 1) * per_page
+
+    product_images = {
+        "Chairs": url_for("static", filename="images/chairs.jfif"),
+        "Tables": "https://images.unsplash.com/photo-1503602642458-232111445657",
+        "Bookcases": url_for("static", filename="images/bookcases.avif"),
+        "Phones": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9",
+        "Machines": url_for("static", filename="images/machines.avif"),
+        "Storage": url_for("static", filename="images/storage.avif"),
+        "Binders": "https://images.unsplash.com/photo-1586281380117-5a60ae2050cc",
+        "Accessories": url_for("static", filename="images/accessories.avif"),
+        "Supplies":url_for("static", filename="images/supplies.avif"),
+        "Copiers": url_for("static", filename="images/copiers.avif"),
+        "Appliances": url_for("static", filename="images/appliances.avif"),
+        "Art": "https://images.unsplash.com/photo-1513364776144-60967b0f800f",
+        "Paper": "https://images.unsplash.com/photo-1455390582262-044cdead277a",
+        "Labels": "https://images.unsplash.com/photo-1586075010923-2dd4570fb338",
+        "Envelopes":url_for("static", filename="images/envelopes.avif"),
+        "Fasteners": "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc",
+        "Furnishings": "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85"
+    }
+
+    conn = db.open_connection()
+    try:
+        count_row = db.run_query(conn, """
+            SELECT COUNT(*) AS total
+            FROM (
+                SELECT sub_category
+                FROM ml_inventory
+                GROUP BY sub_category
+            ) AS grouped
+        """)[0]
+
+        total_items = int(count_row["total"])
+        total_pages = (total_items + per_page - 1) // per_page
+
+        products = db.run_query(conn, """
+            SELECT
+                sub_category,
+                ROUND(SUM(sales), 2) AS total_sales,
+                SUM(quantity) AS total_quantity,
+                ROUND(AVG(stock_level), 0) AS avg_stock_level,
+                ROUND(AVG(reorder_point), 0) AS avg_reorder_point,
+                MAX(low_stock) AS low_stock,
+                MAX(near_expiry) AS near_expiry,
+                ROUND(SUM(profit), 2) AS total_profit
+            FROM ml_inventory
+            GROUP BY sub_category
+            ORDER BY sub_category
+            LIMIT %s OFFSET %s
+        """, (per_page, offset))
+
+        # attach image to each grouped product
+        for product in products:
+            product["image"] = product_images.get(
+                product["sub_category"],
+                "https://via.placeholder.com/300x160?text=StockGenius"
+            )
+
+        return render_template(
+            "inventory.html",
+            products=products,
+            active_page="inventory",
+            page=page,
+            total_pages=total_pages
+        )
+
+    finally:
+        db.close_connection(conn)
 
 @app.route("/alerts")
 def alerts():
