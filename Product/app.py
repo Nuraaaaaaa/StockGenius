@@ -89,7 +89,8 @@ def inventory():
                 ROUND(AVG(reorder_point), 0) AS avg_reorder_point,
                 MAX(low_stock) AS low_stock,
                 MAX(near_expiry) AS near_expiry,
-                ROUND(SUM(profit), 2) AS total_profit
+                ROUND(SUM(profit), 2) AS total_profit,
+                 ROUND(AVG(discount) * 100, 1) AS avg_discount
             FROM ml_inventory
             GROUP BY sub_category
             ORDER BY sub_category
@@ -119,6 +120,7 @@ def alerts():
     return render_template("alert.html", active_page="alerts")
 
 @app.route("/analytics")
+@login_required
 def analytic():
     return render_template("analytic.html", active_page="analytic")
 
@@ -203,32 +205,28 @@ def api_login():
 @app.route("/api/dashboard/stats")
 @login_required
 def dashboard_stats():
-    """
-    KPI cards — all sourced directly from ML-computed columns:
-      Low_Stock    → flagged by your reorder_point logic
-      Near_Expiry  → flagged by Days_To_Expiry < 30
-      Is_Anomaly   → flagged by Isolation Forest
-      Sales        → total revenue in dataset
-    """
     conn = db.open_connection()
     try:
         row = db.run_query(conn, """
             SELECT
-                COUNT(*)                        AS total_records,
-                SUM(low_stock)                  AS low_stock_count,
-                SUM(near_expiry)                AS near_expiry_count,
-                SUM(is_anomaly)                 AS anomaly_count,
-                ROUND(SUM(sales), 2)            AS total_sales,
-                COUNT(DISTINCT sub_category)    AS total_products
+                COUNT(*) AS total_records,
+                SUM(low_stock) AS low_stock_count,
+                SUM(near_expiry) AS near_expiry_count,
+                SUM(is_anomaly) AS anomaly_count,
+                ROUND(SUM(sales), 2) AS total_sales,
+                COUNT(DISTINCT sub_category) AS total_products,
+                ROUND(AVG(sales), 2) AS avg_order_value
             FROM ml_inventory
         """)[0]
 
         return jsonify({
-            "total_products":  int(row["total_products"]),
-            "low_stock":       int(row["low_stock_count"]   or 0),
-            "near_expiry":     int(row["near_expiry_count"] or 0),
-            "anomaly_count":   int(row["anomaly_count"]     or 0),
-            "total_sales":     float(row["total_sales"]     or 0),
+            "total_products": int(row["total_products"] or 0),
+            "total_records": int(row["total_records"] or 0),
+            "low_stock": int(row["low_stock_count"] or 0),
+            "near_expiry": int(row["near_expiry_count"] or 0),
+            "anomaly_count": int(row["anomaly_count"] or 0),
+            "total_sales": float(row["total_sales"] or 0),
+            "avg_order_value": float(row["avg_order_value"] or 0),
         })
     finally:
         db.close_connection(conn)
