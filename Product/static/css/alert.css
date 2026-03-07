@@ -1,0 +1,33 @@
+.alert-card {
+  transition: all 0.25s ease;
+}
+
+.alert-card:hover {
+  transform: translateY(-2px);
+}
+
+.alert-card.is-hidden {
+  display: none;
+}
+
+.alert-card.is-acknowledged {
+  opacity: 0.6;
+}
+
+.ack-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.action-btn {
+  transition: 0.2s ease;
+}
+
+.action-btn:hover {
+  filter: brightness(0.95);
+}
+
+.close-btn,
+.ack-btn {
+  transition: 0.2s ease;
+}

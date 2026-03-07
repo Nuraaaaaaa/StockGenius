@@ -116,9 +116,153 @@ def inventory():
         db.close_connection(conn)
 
 @app.route("/alerts")
+@login_required
 def alerts():
-    return render_template("alert.html", active_page="alerts")
+    conn = db.open_connection()
+    try:
+        # Critical alerts: anomaly + very low stock
+        critical_rows = db.run_query(conn, """
+            SELECT
+                sub_category,
+                stock_level,
+                reorder_point,
+                days_to_expiry,
+                quantity,
+                sales,
+                profit,
+                is_anomaly,
+                low_stock,
+                near_expiry
+            FROM ml_inventory
+            WHERE is_anomaly = 1
+               OR (low_stock = 1 AND stock_level <= reorder_point * 0.5)
+               OR (near_expiry = 1 AND days_to_expiry <= 7)
+            ORDER BY is_anomaly DESC, days_to_expiry ASC, stock_level ASC
+            LIMIT 5
+        """)
 
+        # Warning alerts: low stock or near expiry
+        warning_rows = db.run_query(conn, """
+            SELECT
+                sub_category,
+                stock_level,
+                reorder_point,
+                days_to_expiry,
+                quantity,
+                sales,
+                profit,
+                is_anomaly,
+                low_stock,
+                near_expiry
+            FROM ml_inventory
+            WHERE (low_stock = 1 OR near_expiry = 1)
+              AND is_anomaly = 0
+            ORDER BY near_expiry DESC, low_stock DESC, stock_level ASC
+            LIMIT 5
+        """)
+
+        # ML insights: top demand products
+        ml_rows = db.run_query(conn, """
+            SELECT
+                sub_category,
+                SUM(quantity) AS total_quantity,
+                ROUND(SUM(sales), 2) AS total_sales,
+                ROUND(AVG(profit_margin), 2) AS avg_margin
+            FROM ml_inventory
+            GROUP BY sub_category
+            ORDER BY total_quantity DESC
+            LIMIT 3
+        """)
+
+        alerts_data = []
+
+        # Critical cards
+        for row in critical_rows:
+            if row["is_anomaly"] == 1:
+                alerts_data.append({
+                    "type": "critical",
+                    "icon": "⛔",
+                    "title": "Anomaly Detected",
+                    "subtitle": f"Product: {row['sub_category']}",
+                    "message": f"{row['sub_category']} has unusual inventory behavior. Review this item immediately.",
+                    "action": "Review Alert",
+                    "time": "Just now"
+                })
+            elif row["near_expiry"] == 1 and row["days_to_expiry"] is not None and row["days_to_expiry"] <= 7:
+                alerts_data.append({
+                    "type": "critical",
+                    "icon": "🗓️",
+                    "title": "Expiry Alert",
+                    "subtitle": f"Product: {row['sub_category']}",
+                    "message": f"{row['sub_category']} expires in {int(row['days_to_expiry'])} days.",
+                    "action": "Apply Discount",
+                    "time": "Recently"
+                })
+            elif row["low_stock"] == 1:
+                alerts_data.append({
+                    "type": "critical",
+                    "icon": "📦",
+                    "title": "Critical Stock Level",
+                    "subtitle": f"Product: {row['sub_category']}",
+                    "message": f"{row['sub_category']} stock is critically low ({int(row['stock_level'])} left). Immediate reorder required.",
+                    "action": "Reorder Now",
+                    "time": "Recently"
+                })
+
+        # Warning cards
+        for row in warning_rows:
+            if row["near_expiry"] == 1 and row["days_to_expiry"] is not None:
+                alerts_data.append({
+                    "type": "warning",
+                    "icon": "⚠️",
+                    "title": "Near Expiry Warning",
+                    "subtitle": f"Product: {row['sub_category']}",
+                    "message": f"{row['sub_category']} will expire in {int(row['days_to_expiry'])} days.",
+                    "action": "Review Item",
+                    "time": "Recently"
+                })
+            elif row["low_stock"] == 1:
+                alerts_data.append({
+                    "type": "warning",
+                    "icon": "⚠️",
+                    "title": "Low Stock Alert",
+                    "subtitle": f"Product: {row['sub_category']}",
+                    "message": f"{row['sub_category']} is below reorder point. Only {int(row['stock_level'])} units remaining.",
+                    "action": "Review Order",
+                    "time": "Recently"
+                })
+
+        # ML insight cards
+        for row in ml_rows:
+            alerts_data.append({
+                "type": "ml",
+                "icon": "🤖",
+                "title": "AI Demand Forecast",
+                "subtitle": f"Product: {row['sub_category']}",
+                "message": f"{row['sub_category']} shows high demand with {int(row['total_quantity'])} units sold.",
+                "action": "View Forecast",
+                "time": "Today"
+            })
+
+        # counts for tabs
+        counts = {
+            "all": len(alerts_data),
+            "critical": len([a for a in alerts_data if a["type"] == "critical"]),
+            "warning": len([a for a in alerts_data if a["type"] == "warning"]),
+            "info": len([a for a in alerts_data if a["type"] == "info"]),
+            "ml": len([a for a in alerts_data if a["type"] == "ml"]),
+        }
+
+        return render_template(
+            "alert.html",
+            active_page="alerts",
+            alerts_data=alerts_data,
+            counts=counts
+        )
+
+    finally:
+        db.close_connection(conn)
+        
 @app.route("/analytics")
 @login_required
 def analytic():
