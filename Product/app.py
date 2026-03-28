@@ -3,11 +3,15 @@ from database.database import MySqlConnection
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
 from functools import wraps
-
+import subprocess
+import sys
+import os
+    
 app = Flask(__name__)
 app.secret_key = "9#kL2!xQz@81bP$7vR_stockgenius_2026"
 db = MySqlConnection()
-
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -741,6 +745,99 @@ def rule_based_reply(msg, stats, low_stock, near_expiry, anomalies, demand, neg_
 
     return ("I can help with low stock, expiry alerts, anomalies, demand forecasting, and profit margins. "
             "Try asking: 'Which products are low on stock?' or 'Show anomalies'.")
+
+@app.route("/api/products/add", methods=["POST"])
+@login_required
+def add_product():
+    data = request.get_json() or {}
+
+    product_name = (data.get("product_name") or "").strip()
+    category = (data.get("category") or "").strip()
+    sub_category = (data.get("sub_category") or "").strip()
+
+    if not product_name or not category or not sub_category:
+        return jsonify({"message": "Product name, category, and sub-category are required."}), 400
+
+    rebuild_script = os.path.join(BASE_DIR, "run_once_import.py")
+    forecast_script = os.path.join(BASE_DIR, "save_arima_forecast.py")
+
+    if not os.path.exists(rebuild_script):
+        return jsonify({
+            "message": f"File not found: {rebuild_script}"
+        }), 500
+
+    if not os.path.exists(forecast_script):
+        return jsonify({
+            "message": f"File not found: {forecast_script}"
+        }), 500
+
+    conn = db.open_connection()
+    try:
+        db.execute_update(conn, """
+            INSERT INTO manual_products (
+                product_name, ship_mode, segment, country, city, state, postal_code,
+                region, category, sub_category, sales, quantity, discount, profit,
+                order_date, stock_level, reorder_point, shelf_life_days
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            product_name,
+            data.get("ship_mode", "Standard Class"),
+            data.get("segment", "Consumer"),
+            data.get("country", "United States"),
+            data.get("city", "Unknown"),
+            data.get("state", "Unknown"),
+            data.get("postal_code", "00000"),
+            data.get("region", "Unknown"),
+            category,
+            sub_category,
+            float(data.get("sales", 0) or 0),
+            int(data.get("quantity", 0) or 0),
+            float(data.get("discount", 0) or 0),
+            float(data.get("profit", 0) or 0),
+            data.get("order_date") or None,
+            int(data.get("stock_level", 0) or 0),
+            int(data.get("reorder_point", 0) or 0),
+            int(data.get("shelf_life_days", 365) or 365)
+        ))
+
+        # extra safe commit
+        conn.commit()
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"message": f"Database insert failed: {str(e)}"}), 500
+
+    finally:
+        db.close_connection(conn)
+
+    try:
+        rebuild_result = subprocess.run(
+            [sys.executable, rebuild_script],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=BASE_DIR
+        )
+
+        forecast_result = subprocess.run(
+            [sys.executable, forecast_script],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=BASE_DIR
+        )
+
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+            "message": "Product saved, but rebuild failed.",
+            "error": e.stderr or e.stdout or str(e)
+        }), 500
+
+    return jsonify({
+        "message": "Product added and model data rebuilt successfully.",
+        "rebuild_output": rebuild_result.stdout,
+        "forecast_output": forecast_result.stdout
+    }), 201
 
 if __name__ == "__main__":
     app.run(debug=True)
