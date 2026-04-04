@@ -940,6 +940,191 @@ def rule_based_reply(msg, stats, low_stock, near_expiry, anomalies, demand, neg_
     return ("I can help with low stock, expiry alerts, anomalies, demand forecasting, and profit margins. "
             "Try asking: 'Which products are low on stock?' or 'Show anomalies'.")
 
+@app.route("/api/products/<int:product_id>", methods=["GET"])
+@login_required
+def get_product(product_id):
+    conn = db.open_connection()
+    try:
+        rows = db.run_query(conn, """
+            SELECT
+                id,
+                product_name,
+                category,
+                sub_category,
+                sales,
+                quantity,
+                discount,
+                profit,
+                order_date,
+                stock_level,
+                reorder_point,
+                shelf_life_days
+            FROM manual_products
+            WHERE id = %s
+            LIMIT 1
+        """, (product_id,))
+
+        if not rows:
+            return jsonify({"message": "Product not found."}), 404
+
+        product = rows[0]
+        product["discount"] = float(product["discount"] or 0) * 100
+        product["order_date"] = str(product["order_date"]) if product["order_date"] else ""
+
+        return jsonify(product), 200
+    finally:
+        db.close_connection(conn)
+
+
+@app.route("/api/products/<int:product_id>/update", methods=["POST"])
+@login_required
+def update_product(product_id):
+    data = request.get_json() or {}
+
+    product_name = (data.get("product_name") or "").strip()
+    category = (data.get("category") or "").strip()
+    sub_category = (data.get("sub_category") or "").strip()
+
+    if not product_name or not category or not sub_category:
+        return jsonify({"message": "Product name, category, and sub-category are required."}), 400
+
+    try:
+        sales = float(data.get("sales", 0) or 0)
+        quantity = int(data.get("quantity", 0) or 0)
+        discount_input = float(data.get("discount", 0) or 0)
+        profit = float(data.get("profit", 0) or 0)
+        stock_level = int(data.get("stock_level", 0) or 0)
+        reorder_point = int(data.get("reorder_point", 0) or 0)
+        shelf_life_days = int(data.get("shelf_life_days", 365) or 365)
+    except ValueError:
+        return jsonify({"message": "Please enter valid numeric values."}), 400
+
+    if discount_input < 0 or discount_input > 100:
+        return jsonify({"message": "Discount must be between 0 and 100 percent."}), 400
+
+    discount_value = discount_input / 100.0
+
+    rebuild_script = os.path.join(BASE_DIR, "run_once_import.py")
+    forecast_script = os.path.join(BASE_DIR, "save_arima_forecast.py")
+
+    conn = db.open_connection()
+    try:
+        existing = db.run_query(conn, "SELECT id FROM manual_products WHERE id = %s", (product_id,))
+        if not existing:
+            return jsonify({"message": "Product not found."}), 404
+
+        db.execute_update(conn, """
+            UPDATE manual_products
+            SET
+                product_name = %s,
+                category = %s,
+                sub_category = %s,
+                sales = %s,
+                quantity = %s,
+                discount = %s,
+                profit = %s,
+                order_date = %s,
+                stock_level = %s,
+                reorder_point = %s,
+                shelf_life_days = %s
+            WHERE id = %s
+        """, (
+            product_name,
+            category,
+            sub_category,
+            sales,
+            quantity,
+            discount_value,
+            profit,
+            data.get("order_date") or None,
+            stock_level,
+            reorder_point,
+            shelf_life_days,
+            product_id
+        ))
+
+        conn.commit()
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"message": f"Database update failed: {str(e)}"}), 500
+
+    finally:
+        db.close_connection(conn)
+
+    try:
+        subprocess.run(
+            [sys.executable, rebuild_script],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=BASE_DIR
+        )
+
+        subprocess.run(
+            [sys.executable, forecast_script],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=BASE_DIR
+        )
+
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+            "message": "Product updated, but rebuild failed.",
+            "error": e.stderr or e.stdout or str(e)
+        }), 500
+
+    return jsonify({"message": "Product updated successfully."}), 200
+
+
+@app.route("/api/products/<int:product_id>/delete", methods=["POST"])
+@login_required
+def delete_product(product_id):
+    rebuild_script = os.path.join(BASE_DIR, "run_once_import.py")
+    forecast_script = os.path.join(BASE_DIR, "save_arima_forecast.py")
+
+    conn = db.open_connection()
+    try:
+        existing = db.run_query(conn, "SELECT id FROM manual_products WHERE id = %s", (product_id,))
+        if not existing:
+            return jsonify({"message": "Product not found."}), 404
+
+        db.execute_update(conn, "DELETE FROM manual_products WHERE id = %s", (product_id,))
+        conn.commit()
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"message": f"Database delete failed: {str(e)}"}), 500
+
+    finally:
+        db.close_connection(conn)
+
+    try:
+        subprocess.run(
+            [sys.executable, rebuild_script],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=BASE_DIR
+        )
+
+        subprocess.run(
+            [sys.executable, forecast_script],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=BASE_DIR
+        )
+
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+            "message": "Product deleted, but rebuild failed.",
+            "error": e.stderr or e.stdout or str(e)
+        }), 500
+
+    return jsonify({"message": "Product deleted successfully."}), 200
+   
 @app.route("/api/products/add", methods=["POST"])
 @login_required
 def add_product():
@@ -951,6 +1136,22 @@ def add_product():
 
     if not product_name or not category or not sub_category:
         return jsonify({"message": "Product name, category, and sub-category are required."}), 400
+
+    try:
+        sales = float(data.get("sales", 0) or 0)
+        quantity = int(data.get("quantity", 0) or 0)
+        discount_input = float(data.get("discount", 0) or 0)
+        profit = float(data.get("profit", 0) or 0)
+        stock_level = int(data.get("stock_level", 0) or 0)
+        reorder_point = int(data.get("reorder_point", 0) or 0)
+        shelf_life_days = int(data.get("shelf_life_days", 365) or 365)
+    except ValueError:
+        return jsonify({"message": "Please enter valid numeric values."}), 400
+
+    if discount_input < 0 or discount_input > 100:
+        return jsonify({"message": "Discount must be between 0 and 100 percent."}), 400
+
+    discount_value = discount_input / 100.0
 
     rebuild_script = os.path.join(BASE_DIR, "run_once_import.py")
     forecast_script = os.path.join(BASE_DIR, "save_arima_forecast.py")
@@ -984,17 +1185,16 @@ def add_product():
             data.get("region", "Unknown"),
             category,
             sub_category,
-            float(data.get("sales", 0) or 0),
-            int(data.get("quantity", 0) or 0),
-            float(data.get("discount", 0) or 0),
-            float(data.get("profit", 0) or 0),
+            sales,
+            quantity,
+            discount_value,
+            profit,
             data.get("order_date") or None,
-            int(data.get("stock_level", 0) or 0),
-            int(data.get("reorder_point", 0) or 0),
-            int(data.get("shelf_life_days", 365) or 365)
+            stock_level,
+            reorder_point,
+            shelf_life_days
         ))
 
-        # extra safe commit
         conn.commit()
 
     except Exception as e:
