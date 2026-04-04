@@ -19,6 +19,17 @@ def login_required(f):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+
+        if session.get("role") != "admin":
+            return redirect(url_for("dashboard"))
+        return f(*args, **kwargs)
+    return decorated
+
 
 """ 
 @app.route("/test")
@@ -41,7 +52,8 @@ def login():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    return render_template("dashboard.html", active_page="dashboard")
+    return render_template("dashboard.html", active_page="dashboard", user_name=session.get("user_name"),
+        user_role=session.get("role"))
 
 @app.route("/inventory")
 @login_required
@@ -112,6 +124,8 @@ def inventory():
             "inventory.html",
             products=products,
             active_page="inventory",
+            user_name=session.get("user_name"),
+        user_role=session.get("role"),
             page=page,
             total_pages=total_pages
         )
@@ -260,6 +274,8 @@ def alerts():
         return render_template(
             "alert.html",
             active_page="alerts",
+            user_name=session.get("user_name"),
+        user_role=session.get("role"),
             alerts_data=alerts_data,
             counts=counts
         )
@@ -267,34 +283,101 @@ def alerts():
     finally:
         db.close_connection(conn)
         
+
 @app.route("/analytics")
 @login_required
 def analytic():
-    return render_template("analytic.html", active_page="analytic")
+    return render_template(
+        "analytic.html",
+        active_page="analytic",
+        user_name=session.get("user_name"),
+        user_role=session.get("role")
+    )
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
 
-@app.route("/signup")
-def signup_page():
-    return render_template("signup.html")
+@app.route("/admin/users")
+@admin_required
+def admin_users():
+    conn = db.open_connection()
+    try:
+        users = db.run_query(conn, """
+            SELECT id, full_name, email, role, created_at
+            FROM users
+            ORDER BY created_at DESC
+        """)
+        return render_template(
+            "admin_users.html",
+            users=users,
+            active_page="admin_users",
+            user_name=session.get("user_name"),
+            user_role=session.get("role")
+        )
+    finally:
+        db.close_connection(conn)
 
-@app.post("/api/signup")
-def signup():
-    data = request.get_json()
 
-    name = data.get("name")
-    email = data.get("email")
-    password = data.get("password")
+@app.route("/admin/users/create")
+@admin_required
+def admin_create_user_page():
+    return render_template(
+        "admin_create_user.html",
+        active_page="admin_create_user",
+        user_name=session.get("user_name"),
+        user_role=session.get("role")
+    )
 
-    if not name or not email or not password:
-        return jsonify({"message": "All fields required"}), 400
+@app.route("/api/admin/users", methods=["POST"])
+@admin_required
+def admin_create_user():
+    data = request.get_json() or {}
+
+    full_name = (data.get("full_name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    password = (data.get("password") or "").strip()
+    role = (data.get("role") or "staff").strip().lower()
+
+    # full name validation
+    name_parts = full_name.split()
+    if len(name_parts) < 2:
+        return jsonify({
+            "message": "Full name must contain at least 2 words."
+        }), 400
+
+    # email validation
+    if not email:
+        return jsonify({
+            "message": "Email is required."
+        }), 400
+
+    # role validation
+    if role not in ["admin", "staff"]:
+        return jsonify({
+            "message": "Invalid role selected."
+        }), 400
+
+    # password validation
+    if len(password) < 8:
+        return jsonify({
+            "message": "Password must be at least 8 characters long."
+        }), 400
+
+    if not any(char.isupper() for char in password):
+        return jsonify({
+            "message": "Password must contain at least one uppercase letter."
+        }), 400
+
+    if not any(char.islower() for char in password):
+        return jsonify({
+            "message": "Password must contain at least one lowercase letter."
+        }), 400
+
+    if not any(char.isdigit() for char in password):
+        return jsonify({
+            "message": "Password must contain at least one number."
+        }), 400
 
     conn = db.open_connection()
     try:
-        # Check if email exists
         existing = db.run_query(
             conn,
             "SELECT id FROM users WHERE email = %s",
@@ -302,19 +385,125 @@ def signup():
         )
 
         if existing:
-            return jsonify({"message": "Email already exists"}), 409
+            return jsonify({
+                "message": "Email already exists."
+            }), 409
 
-        # Hash password (VERY IMPORTANT)
-        hashed_password = generate_password_hash(password)
+        password_hash = generate_password_hash(password)
 
         db.execute_update(
             conn,
-            "INSERT INTO users (full_name, email, password_hash) VALUES (%s, %s, %s)",
-            (name, email, hashed_password)
+            """
+            INSERT INTO users (full_name, email, password_hash, role)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (full_name, email, password_hash, role)
         )
 
-        return jsonify({"message": "Account created successfully"}), 201
+        return jsonify({
+            "message": "User created successfully."
+        }), 201
 
+    finally:
+        db.close_connection(conn)
+
+
+@app.route("/api/admin/users/<int:user_id>/delete", methods=["POST"])
+@admin_required
+def admin_delete_user(user_id):
+    if session.get("user_id") == user_id:
+        return jsonify({"message": "You cannot delete your own admin account while logged in."}), 400
+
+    conn = db.open_connection()
+    try:
+        db.execute_update(conn, "DELETE FROM users WHERE id = %s", (user_id,))
+        return jsonify({"message": "User deleted successfully."}), 200
+    finally:
+        db.close_connection(conn)
+        
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/api/admin/users/<int:user_id>/update", methods=["POST"])
+@admin_required
+def admin_update_user(user_id):
+    data = request.get_json() or {}
+
+    full_name = (data.get("full_name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    password = (data.get("password") or "").strip()
+    role = (data.get("role") or "staff").strip().lower()
+
+    if not full_name or not email:
+        return jsonify({"message": "Name and email are required."}), 400
+
+    if role not in ["admin", "staff"]:
+        return jsonify({"message": "Invalid role."}), 400
+
+    conn = db.open_connection()
+    try:
+        existing = db.run_query(
+            conn,
+            "SELECT id FROM users WHERE email = %s AND id != %s",
+            (email, user_id)
+        )
+
+        if existing:
+            return jsonify({"message": "Email already used by another user."}), 409
+
+        if password:
+            password_hash = generate_password_hash(password)
+            db.execute_update(conn, """
+                UPDATE users
+                SET full_name = %s, email = %s, password_hash = %s, role = %s
+                WHERE id = %s
+            """, (full_name, email, password_hash, role, user_id))
+        else:
+            db.execute_update(conn, """
+                UPDATE users
+                SET full_name = %s, email = %s, role = %s
+                WHERE id = %s
+            """, (full_name, email, role, user_id))
+
+        return jsonify({"message": "User updated successfully."}), 200
+    finally:
+        db.close_connection(conn)
+        
+@app.route("/signup")
+def signup_page():
+    return redirect(url_for("login"))
+
+@app.route("/admin/users/edit/<int:user_id>")
+@admin_required
+def admin_edit_user_page(user_id):
+    conn = db.open_connection()
+    try:
+        rows = db.run_query(
+            conn,
+            """
+            SELECT id, full_name, email, role
+            FROM users
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (user_id,)
+        )
+
+        if not rows:
+            return redirect(url_for("admin_users"))
+
+        user = rows[0]
+
+        return render_template(
+            "admin_edit_user.html",
+            user=user,
+            active_page="admin_users",
+            user_name=session.get("user_name"),
+            user_role=session.get("role")
+        )
     finally:
         db.close_connection(conn)
 
@@ -331,7 +520,7 @@ def api_login():
     try:
         rows = db.run_query(
             conn,
-            "SELECT id, full_name, email, password_hash FROM users WHERE email=%s LIMIT 1",
+           "SELECT id, full_name, email, password_hash, role FROM users WHERE email=%s LIMIT 1",
             (email,)
         )
         if not rows:
@@ -344,8 +533,13 @@ def api_login():
 
         session["user_id"] = user["id"]
         session["user_name"] = user["full_name"]
-
-        return jsonify({"message": "Login success"}), 200
+        session["user_email"] = user["email"]
+        session["role"] = user["role"]
+        return jsonify({
+            "message": "Login success",
+            "role": user["role"],
+            "redirect": "/dashboard"
+        }), 200
     finally:
         db.close_connection(conn)
         

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Create User</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+
+  <body class="bg-gray-100">
+    <div class="flex min-h-screen">
+      {% include "sidebar.html" %}
+
+      <main class="flex-1 p-8">
+        <div class="max-w-2xl bg-white rounded-xl shadow p-6">
+          <h2 class="text-2xl font-bold text-gray-800 mb-2">Create User</h2>
+          <p class="text-gray-500 mb-6">
+            Add a new user account. Full name must contain at least 2 words.
+            Password must be strong.
+          </p>
+
+          <form id="createUserForm" class="space-y-5" novalidate>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Full Name
+              </label>
+              <input
+                id="full_name"
+                type="text"
+                placeholder="e.g. John Doe"
+                class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+              <p id="nameError" class="mt-1 text-sm text-red-600 hidden"></p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                placeholder="Enter email"
+                class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+              <p id="emailError" class="mt-1 text-sm text-red-600 hidden"></p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                placeholder="Min 8 chars, 1 uppercase, 1 lowercase, 1 number"
+                class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+              <p class="mt-1 text-xs text-gray-500">
+                Password must be at least 8 characters and include at least one uppercase letter, one lowercase letter, and one number.
+              </p>
+              <p id="passwordError" class="mt-1 text-sm text-red-600 hidden"></p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Role
+              </label>
+              <select
+                id="role"
+                class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="staff">Staff</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button
+                type="submit"
+                class="px-5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Create User
+              </button>
+
+              <a
+                href="/admin/users"
+                class="px-5 py-2 rounded-lg bg-gray-300 text-gray-800 hover:bg-gray-400"
+              >
+                Cancel
+              </a>
+            </div>
+          </form>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      const form = document.getElementById("createUserForm");
+      const fullNameInput = document.getElementById("full_name");
+      const emailInput = document.getElementById("email");
+      const passwordInput = document.getElementById("password");
+      const roleInput = document.getElementById("role");
+
+      const nameError = document.getElementById("nameError");
+      const emailError = document.getElementById("emailError");
+      const passwordError = document.getElementById("passwordError");
+
+      function showError(element, message, input) {
+        element.textContent = message;
+        element.classList.remove("hidden");
+        input.classList.add("border-red-500");
+      }
+
+      function clearError(element, input) {
+        element.textContent = "";
+        element.classList.add("hidden");
+        input.classList.remove("border-red-500");
+      }
+
+      function validateFullName(name) {
+        const parts = name.trim().split(/\s+/).filter(Boolean);
+        return parts.length >= 2;
+      }
+
+      function validatePassword(password) {
+        if (password.length < 8) {
+          return "Password must be at least 8 characters long.";
+        }
+        if (!/[A-Z]/.test(password)) {
+          return "Password must contain at least one uppercase letter.";
+        }
+        if (!/[a-z]/.test(password)) {
+          return "Password must contain at least one lowercase letter.";
+        }
+        if (!/[0-9]/.test(password)) {
+          return "Password must contain at least one number.";
+        }
+        return "";
+      }
+
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+
+        const full_name = fullNameInput.value.trim();
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
+        const role = roleInput.value;
+
+        let hasError = false;
+
+        clearError(nameError, fullNameInput);
+        clearError(emailError, emailInput);
+        clearError(passwordError, passwordInput);
+
+        if (!validateFullName(full_name)) {
+          showError(
+            nameError,
+            "Full name must contain at least 2 words, for example John Doe.",
+            fullNameInput
+          );
+          hasError = true;
+        }
+
+        if (!email) {
+          showError(emailError, "Email is required.", emailInput);
+          hasError = true;
+        }
+
+        const passwordMessage = validatePassword(password);
+        if (passwordMessage) {
+          showError(passwordError, passwordMessage, passwordInput);
+          hasError = true;
+        }
+
+        if (hasError) return;
+
+        const payload = {
+          full_name,
+          email,
+          password,
+          role
+        };
+
+        try {
+          const res = await fetch("/api/admin/users", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await res.json();
+          alert(data.message);
+
+          if (res.ok) {
+            window.location.href = "/admin/users";
+          }
+        } catch (error) {
+          alert("Something went wrong while creating the user.");
+          console.error(error);
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Admin Users</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+
+  <body class="bg-gray-100">
+    <div class="flex min-h-screen">
+      <!-- Sidebar -->
+      {% include "sidebar.html" %}
+
+      <!-- Main -->
+      <main class="flex-1 p-8">
+        <div class="flex justify-between mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-gray-800">Registered Users</h2>
+            <div
+              class="inline-flex items-center gap-2 bg-white border rounded-lg px-4 py-2 shadow-sm mt-2"
+            >
+              <span class="text-sm text-gray-500">Total Users:</span>
+              <span class="text-sm font-semibold text-blue-600"
+                >{{ users|length }}</span
+              >
+            </div>
+            <a
+              href="/admin/users/create"
+              class="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Add User
+            </a>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow overflow-hidden">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-200 text-gray-700">
+              <tr>
+                <th class="px-4 py-3 text-left">ID</th>
+                <th class="px-4 py-3 text-left">Name</th>
+                <th class="px-4 py-3 text-left">Email</th>
+                <th class="px-4 py-3 text-left">Role</th>
+                <th class="px-4 py-3 text-left">Action</th>
+              </tr>
+            </thead>
+
+            <tbody class="divide-y">
+              {% for user in users %}
+              <tr>
+                <td class="px-4 py-3">{{ user.id }}</td>
+                <td class="px-4 py-3">{{ user.full_name }}</td>
+                <td class="px-4 py-3">{{ user.email }}</td>
+                <td class="px-4 py-3">{{ user.role }}</td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    <!-- EDIT BUTTON -->
+                    <a
+                      href="/admin/users/edit/{{ user.id }}"
+                      class="px-3 py-1 bg-amber-500 text-white rounded hover:bg-amber-600"
+                    >
+                      Edit
+                    </a>
+
+                    <!-- DELETE BUTTON -->
+                    {% if user.email != session.get('user_email') %}
+                    <button
+                      onclick="deleteUser({{ user.id }})"
+                      class="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                    >
+                      Delete
+                    </button>
+                    {% else %}
+                    <span class="text-xs text-gray-400 italic"
+                      >Current User</span
+                    >
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+    <script>
+      async function deleteUser(userId) {
+        const ok = confirm("Are you sure you want to delete this user?");
+        if (!ok) return;
+
+        const res = await fetch(`/api/admin/users/${userId}/delete`, {
+          method: "POST",
+        });
+
+        const data = await res.json();
+        alert(data.message);
+
+        if (res.ok) {
+          window.location.reload();
+        }
+      }
+    </script>
+  </body>
+</html>

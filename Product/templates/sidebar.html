@@ -7,17 +7,13 @@
   </head>
 
   <body class="bg-gray-100">
-    <div
-      class="h-screen w-72 bg-gray-100 border-r flex flex-col justify-between"
-    >
+    <div class="h-screen w-72 bg-gray-100 border-r flex flex-col justify-between">
       <!-- Top Section -->
       <div>
         <!-- Logo -->
         <div class="p-6 border-b">
           <div class="flex items-center gap-3">
-            <div
-              class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center text-white"
-            >
+            <div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center text-white">
               📦
             </div>
             <span class="font-semibold text-gray-800 text-lg">StockGenius</span>
@@ -27,16 +23,16 @@
         <!-- User Card -->
         <div class="p-4">
           <div class="flex items-center gap-3 bg-gray-200 rounded-xl p-3">
-            <div
-              class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white"
-            >
+            <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white">
               👤
             </div>
             <div>
               <p class="font-medium text-gray-800 text-sm">
                 {{ session.get('user_name', 'Staff User') }}
               </p>
-              <p class="text-xs text-gray-500">Staff</p>
+              <p class="text-xs text-gray-500">
+                {{ user_role|capitalize if user_role else 'Staff' }}
+              </p>
             </div>
           </div>
         </div>
@@ -45,7 +41,7 @@
         <div class="px-4 space-y-2">
           <a
             href="{{ url_for('dashboard') }}"
-            class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'dashboard' %} bg-blue-600 text-white shadow-md {% else %} text-gray-600 hover:bg-gray-200 {% endif %}"
+            class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'dashboard' %}bg-blue-600 text-white shadow-md{% else %}text-gray-600 hover:bg-gray-200{% endif %}"
           >
             <span>📊</span>
             Dashboard
@@ -53,7 +49,7 @@
 
           <a
             href="{{ url_for('inventory') }}"
-            class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'inventory' %} bg-blue-600 text-white shadow-md {% else %} text-gray-600 hover:bg-gray-200 {% endif %}"
+            class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'inventory' %}bg-blue-600 text-white shadow-md{% else %}text-gray-600 hover:bg-gray-200{% endif %}"
           >
             <span>📦</span>
             Inventory
@@ -61,21 +57,47 @@
 
           <a
             href="{{ url_for('analytic') }}"
-            class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'analytic' %} bg-blue-600 text-white shadow-md {% else %} text-gray-600 hover:bg-gray-200 {% endif %}"
+            class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'analytic' %}bg-blue-600 text-white shadow-md{% else %}text-gray-600 hover:bg-gray-200{% endif %}"
           >
             <span>📈</span>
             Analytics
           </a>
 
-          <!-- Active -->
           <a
             href="{{ url_for('alerts') }}"
-            class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'alerts' %} bg-blue-600 text-white shadow-md {% else %} text-gray-600 hover:bg-gray-200 {% endif %}"
+            class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'alerts' %}bg-blue-600 text-white shadow-md{% else %}text-gray-600 hover:bg-gray-200{% endif %}"
           >
             <span>🔔</span>
             Alerts
           </a>
         </div>
+
+        <!-- Admin Panel -->
+        {% if user_role == 'admin' %}
+        <div class="px-4 mt-6">
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-2">
+            Admin Panel
+          </p>
+
+          <div class="space-y-2">
+            <a
+              href="/admin/users"
+              class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'admin_users' %}bg-blue-600 text-white shadow-md{% else %}text-gray-600 hover:bg-gray-200{% endif %}"
+            >
+              <span>👥</span>
+              Manage Users
+            </a>
+
+            <a
+              href="/admin/users/create"
+              class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'admin_create_user' %}bg-blue-600 text-white shadow-md{% else %}text-gray-600 hover:bg-gray-200{% endif %}"
+            >
+              <span>➕</span>
+              Add User
+            </a>
+          </div>
+        </div>
+        {% endif %}
       </div>
 
       <!-- Bottom Logout -->

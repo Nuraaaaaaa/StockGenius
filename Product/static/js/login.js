@@ -43,7 +43,7 @@ form.addEventListener("submit", async (e) => {
     toast.classList.remove("hidden");
 
     setTimeout(() => {
-      window.location.href = "/dashboard";
+      window.location.href = data.redirect || "/dashboard";
     }, 700);
 
   } catch (err) {
