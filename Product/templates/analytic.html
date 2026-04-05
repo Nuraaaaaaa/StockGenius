@@ -6,157 +6,1395 @@
     <title>StockGenius • Analytics & Reports</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
-      href="{{ url_for('static', filename='css/analytics.css') }}"
     />
+    <style>
+      * {
+        -webkit-font-smoothing: antialiased;
+      }
+      body {
+        font-family: "DM Sans", sans-serif;
+        background: #f1f5f9;
+      }
+
+      /* ── All text forced dark for PDF capture visibility ── */
+      .kpi-label {
+        color: #374151;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+      }
+      .kpi-value {
+        color: #0f172a;
+        font-size: 1.55rem;
+        font-weight: 800;
+        margin-top: 6px;
+        line-height: 1.1;
+      }
+      .kpi-meta {
+        color: #374151;
+        font-size: 0.72rem;
+        font-weight: 600;
+        margin-top: 6px;
+      }
+
+      .chart-title {
+        color: #0f172a;
+        font-size: 0.85rem;
+        font-weight: 700;
+      }
+      .chart-sub {
+        color: #374151;
+        font-size: 0.72rem;
+        font-weight: 500;
+        margin-top: 3px;
+      }
+
+      .section-card {
+        background: #fff;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+        padding: 20px;
+      }
+      .stat-card {
+        transition:
+          box-shadow 0.2s,
+          transform 0.2s;
+      }
+      .stat-card:hover {
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+      }
+
+      /* Table text — all dark */
+      .tbl-th {
+        color: #1e293b;
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 12px 16px;
+      }
+      .tbl-td {
+        color: #1e293b;
+        font-size: 0.8rem;
+        font-weight: 500;
+        padding: 10px 16px;
+      }
+      .tbl-td-strong {
+        color: #0f172a;
+        font-size: 0.8rem;
+        font-weight: 700;
+        padding: 10px 16px;
+      }
+
+      /* Badges */
+      .badge-healthy {
+        background: #dcfce7;
+        color: #14532d;
+        border-radius: 6px;
+        padding: 3px 9px;
+        font-size: 0.68rem;
+        font-weight: 800;
+      }
+      .badge-thin {
+        background: #fef9c3;
+        color: #78350f;
+        border-radius: 6px;
+        padding: 3px 9px;
+        font-size: 0.68rem;
+        font-weight: 800;
+      }
+      .badge-loss {
+        background: #fee2e2;
+        color: #7f1d1d;
+        border-radius: 6px;
+        padding: 3px 9px;
+        font-size: 0.68rem;
+        font-weight: 800;
+      }
+      .badge-pos {
+        background: #d1fae5;
+        color: #064e3b;
+        border-radius: 5px;
+        padding: 2px 8px;
+        font-size: 0.7rem;
+        font-weight: 800;
+      }
+      .badge-neg {
+        background: #fee2e2;
+        color: #7f1d1d;
+        border-radius: 5px;
+        padding: 2px 8px;
+        font-size: 0.7rem;
+        font-weight: 800;
+      }
+      .badge-thin2 {
+        background: #fef3c7;
+        color: #78350f;
+        border-radius: 5px;
+        padding: 2px 8px;
+        font-size: 0.7rem;
+        font-weight: 800;
+      }
+
+      /* Filter / date buttons */
+      .date-preset,
+      .filter-btn {
+        padding: 8px 14px;
+        border-radius: 12px;
+        border: 1.5px solid #cbd5e1;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #1e293b;
+        background: #f8fafc;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .date-preset:hover,
+      .filter-btn:hover {
+        background: #e2e8f0;
+      }
+      .date-preset.active,
+      .filter-btn.active {
+        background: #2563eb !important;
+        color: #fff !important;
+        border-color: #2563eb !important;
+      }
+
+      .modal-bg {
+        backdrop-filter: blur(5px);
+      }
+      .exporting {
+        opacity: 0.7;
+        pointer-events: none;
+      }
+
+      #pdfProgress {
+        transition: width 0.4s ease;
+      }
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .fu {
+        animation: fadeUp 0.35s ease both;
+      }
+      .fu:nth-child(1) {
+        animation-delay: 0.04s;
+      }
+      .fu:nth-child(2) {
+        animation-delay: 0.08s;
+      }
+      .fu:nth-child(3) {
+        animation-delay: 0.12s;
+      }
+      .fu:nth-child(4) {
+        animation-delay: 0.16s;
+      }
+
+      /* Search input — dark text */
+      #tableSearch {
+        color: #0f172a;
+        font-weight: 600;
+        background: #fff;
+        border: 1.5px solid #cbd5e1;
+      }
+      #tableSearch::placeholder {
+        color: #64748b;
+        font-weight: 500;
+      }
+    </style>
   </head>
 
-  <body class="min-h-screen bg-slate-50 text-slate-900">
+  <body>
     <div class="min-h-screen flex">
       {% include "sidebar.html" %}
 
-      <main class="flex-1 min-w-0">
-        <header class="bg-white border-b border-slate-200">
-          <div class="px-6 py-4 flex items-center justify-between gap-4">
+      <main class="flex-1 min-w-0 overflow-y-auto">
+        <!-- ── HEADER ─────────────────────────────────────────── -->
+        <header
+          class="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm"
+        >
+          <div
+            class="px-6 py-4 flex items-center justify-between gap-4 flex-wrap"
+          >
             <div>
-              <h1 class="text-lg font-semibold">Analytics & Reports</h1>
-              <p class="text-xs text-slate-500">
-                Comprehensive insights and data analysis
+              <h1 class="text-base font-bold text-slate-900">
+                Analytics &amp; Reports
+              </h1>
+              <p class="text-xs font-semibold text-slate-500 mt-0.5">
+                ML-powered insights from your inventory data
               </p>
             </div>
 
             <div class="flex items-center gap-2 flex-wrap">
               <button
-                class="h-9 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                id="dateRangeBtn"
+                onclick="openDateModal()"
+                class="h-9 px-4 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-800 hover:bg-slate-50 flex items-center gap-2 shadow-sm transition-colors"
               >
-                Date Range
+                📅 <span id="dateLabel">All Time</span>
               </button>
 
               <button
-                class="h-9 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                onclick="openFiltersModal()"
+                class="h-9 px-4 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-800 hover:bg-slate-50 flex items-center gap-2 shadow-sm transition-colors"
               >
-                Filters
+                ⚙️ Filters
+                <span
+                  id="activeFilterCount"
+                  class="hidden text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 font-bold leading-none"
+                ></span>
               </button>
 
               <button
-                class="h-9 px-3 rounded-xl bg-blue-600 text-white text-sm hover:bg-blue-700 active:bg-blue-800 flex items-center gap-2 shadow-sm"
+                id="exportBtn"
+                onclick="exportToPDF()"
+                class="h-9 px-5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 flex items-center gap-2 shadow-md transition-all"
               >
-                Export Report
+                <span id="exportBtnIcon">⬇️</span>
+                <span id="exportBtnText">Export PDF</span>
               </button>
             </div>
+          </div>
+
+          <!-- Progress bar -->
+          <div id="pdfProgressBar" class="hidden h-1 bg-slate-100 w-full">
+            <div
+              id="pdfProgress"
+              class="h-1 bg-blue-500 rounded-r-full"
+              style="width: 0%"
+            ></div>
           </div>
         </header>
 
-        <section class="px-6 py-5">
-          <div class="mt-4 border-b border-slate-200">
-            <div class="flex items-center gap-6 text-sm">
-              <button
-                class="py-3 border-b-2 border-blue-600 text-blue-600 font-medium"
-              >
-                Sales Reports
-              </button>
-              <button class="py-3 text-slate-500 hover:text-slate-700">
-                Inventory Reports
-              </button>
-              <button class="py-3 text-slate-500 hover:text-slate-700">
-                Waste Reports
-              </button>
-              <button class="py-3 text-slate-500 hover:text-slate-700">
-                Prediction Reports
-              </button>
-            </div>
-          </div>
-
-          <div class="mt-5 grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <div
-              class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4"
-            >
-              <div class="flex items-start justify-between">
-                <div>
-                  <div class="text-sm font-semibold">Revenue Over Time</div>
-                  <div id="trendSubtitle" class="text-xs text-slate-500">
-                    Loading revenue trend...
-                  </div>
-                </div>
-              </div>
-
-              <div class="mt-4 h-[220px]">
-                <canvas id="revenueChart"></canvas>
-              </div>
-            </div>
-
-            <div
-              class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4"
-            >
-              <div class="flex items-start justify-between">
-                <div>
-                  <div class="text-sm font-semibold">Sales by Category</div>
-                  <div class="text-xs text-slate-500">
-                    Distribution across product categories
-                  </div>
-                </div>
-              </div>
-
-              <div class="mt-4 h-[220px] flex items-center justify-center">
-                <canvas id="categoryChart" class="max-h-[220px]"></canvas>
-              </div>
-            </div>
-          </div>
-
-          <div
-            class="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
+        <!-- Active filter strip -->
+        <div
+          id="activeFiltersStrip"
+          class="hidden px-6 py-2 bg-blue-50 border-b border-blue-200 items-center gap-2 flex-wrap"
+        >
+          <span class="text-xs font-bold text-blue-800">Active filters:</span>
+          <span
+            id="filterChips"
+            class="flex gap-2 flex-wrap text-xs font-semibold"
+          ></span>
+          <button
+            onclick="clearAllFilters()"
+            class="ml-auto text-xs font-bold text-blue-600 underline hover:text-blue-800"
           >
-            <div
-              class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4"
-            >
-              <div class="text-xs text-slate-500">Total Revenue</div>
-              <div id="totalRevenue" class="mt-1 text-2xl font-semibold">
-                $0.00
+            Clear all
+          </button>
+        </div>
+
+        <!-- ── REPORT CONTENT ──────────────────────────────────── -->
+        <div id="reportContent" class="px-6 py-6 bg-slate-50">
+          <!-- KPI CARDS -->
+          <div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
+            <div class="fu stat-card section-card">
+              <div class="flex items-center justify-between mb-1">
+                <span class="kpi-label">Total Revenue</span>
+                <span class="text-xl">💰</span>
               </div>
-              <div id="revenueMeta" class="mt-2 text-xs text-emerald-600">
-                Live from dataset
-              </div>
+              <div id="totalRevenue" class="kpi-value">$0.00</div>
+              <div id="revenueMeta" class="kpi-meta">Loading…</div>
             </div>
 
-            <div
-              class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4"
-            >
-              <div class="text-xs text-slate-500">Total Transactions</div>
-              <div id="totalTransactions" class="mt-1 text-2xl font-semibold">
-                0
+            <div class="fu stat-card section-card">
+              <div class="flex items-center justify-between mb-1">
+                <span class="kpi-label">Transactions</span>
+                <span class="text-xl">📋</span>
               </div>
-              <div class="mt-2 text-xs text-emerald-600">
-                Records in ml_inventory
-              </div>
+              <div id="totalTransactions" class="kpi-value">0</div>
+              <div class="kpi-meta">Records in ml_inventory</div>
             </div>
 
-            <div
-              class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4"
-            >
-              <div class="text-xs text-slate-500">Average Order Value</div>
-              <div id="avgOrderValue" class="mt-1 text-2xl font-semibold">
-                $0.00
+            <div class="fu stat-card section-card">
+              <div class="flex items-center justify-between mb-1">
+                <span class="kpi-label">Avg Order Value</span>
+                <span class="text-xl">📊</span>
               </div>
-              <div class="mt-2 text-xs text-emerald-600">
-                Average sales per row
-              </div>
+              <div id="avgOrderValue" class="kpi-value">$0.00</div>
+              <div class="kpi-meta">Avg sales per record</div>
             </div>
 
-            <div
-              class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4"
-            >
-              <div class="text-xs text-slate-500">Top Category</div>
-              <div id="topCategory" class="mt-1 text-2xl font-semibold">-</div>
-              <div id="topCategoryMeta" class="mt-2 text-xs text-slate-500">
-                Loading...
+            <div class="fu stat-card section-card">
+              <div class="flex items-center justify-between mb-1">
+                <span class="kpi-label">Top Sub-Category</span>
+                <span class="text-xl">🏆</span>
+              </div>
+              <div
+                id="topCategory"
+                class="kpi-value"
+                style="font-size: 1.05rem"
+              >
+                —
+              </div>
+              <div id="topCategoryMeta" class="kpi-meta">Loading…</div>
+            </div>
+          </div>
+
+          <!-- CHARTS ROW 1 -->
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5">
+            <div class="section-card">
+              <div class="flex items-start justify-between mb-4">
+                <div>
+                  <div class="chart-title">Revenue Over Time</div>
+                  <div id="trendSubtitle" class="chart-sub">Loading…</div>
+                </div>
+                <div
+                  id="revenueLegend"
+                  class="flex gap-3 text-xs font-bold text-slate-700"
+                ></div>
+              </div>
+              <div class="h-[220px]"><canvas id="revenueChart"></canvas></div>
+            </div>
+
+            <div class="section-card">
+              <div class="mb-4">
+                <div class="chart-title">Sales by Sub-Category</div>
+                <div class="chart-sub">
+                  Profit distribution across product groups
+                </div>
+              </div>
+              <div class="h-[220px] flex items-center justify-center">
+                <canvas id="categoryChart"></canvas>
               </div>
             </div>
           </div>
-        </section>
+
+          <!-- CHARTS ROW 2 -->
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5">
+            <div class="section-card">
+              <div class="mb-4">
+                <div class="chart-title">Profit Margin by Sub-Category</div>
+                <div class="chart-sub" style="color: #b91c1c; font-weight: 700">
+                  ⚠ Red = negative margin
+                </div>
+              </div>
+              <div class="h-[220px]"><canvas id="marginChart"></canvas></div>
+            </div>
+
+            <div class="section-card">
+              <div class="mb-4">
+                <div class="chart-title">Top Products by Volume</div>
+                <div class="chart-sub">Units sold per sub-category</div>
+              </div>
+              <div class="h-[220px]">
+                <canvas id="topProductsChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- DATA TABLE -->
+          <div class="section-card mb-4">
+            <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <div>
+                <div class="chart-title">Category Breakdown</div>
+                <div class="chart-sub">
+                  Sales, profit and margin per sub-category
+                </div>
+              </div>
+              <input
+                id="tableSearch"
+                type="text"
+                placeholder="Search categories…"
+                oninput="filterTable()"
+                class="rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
+              />
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-slate-200">
+              <table class="w-full" style="border-collapse: collapse">
+                <thead
+                  style="background: #f8fafc; border-bottom: 2px solid #e2e8f0"
+                >
+                  <tr>
+                    <th class="tbl-th text-left">Sub-Category</th>
+                    <th class="tbl-th text-right">Sales</th>
+                    <th class="tbl-th text-right">Profit</th>
+                    <th class="tbl-th text-right">Margin %</th>
+                    <th class="tbl-th text-right">Units</th>
+                    <th class="tbl-th text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="categoryTableBody">
+                  <tr>
+                    <td
+                      colspan="6"
+                      style="
+                        padding: 28px;
+                        text-align: center;
+                        color: #475569;
+                        font-weight: 600;
+                      "
+                    >
+                      Loading…
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- PDF-only footer -->
+          <div
+            id="pdfFooter"
+            class="hidden text-center py-4 border-t-2 border-slate-200"
+          >
+            <p
+              style="
+                color: #374151;
+                font-size: 0.72rem;
+                font-weight: 700;
+                letter-spacing: 0.04em;
+              "
+            >
+              STOCKGENIUS ANALYTICS REPORT &bull; CONFIDENTIAL
+            </p>
+          </div>
+        </div>
+        <!-- /reportContent -->
       </main>
     </div>
 
-    <script src="{{ url_for('static', filename='js/analytics.js') }}"></script>
+    <!-- ════════════════════════════════════════════════
+         DATE RANGE MODAL
+    ════════════════════════════════════════════════ -->
+    <div
+      id="dateModal"
+      class="modal-bg fixed inset-0 bg-black/40 hidden items-center justify-center z-50"
+    >
+      <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
+        <div class="flex justify-between items-center mb-5">
+          <h2 class="text-base font-bold text-slate-900">Select Date Range</h2>
+          <button
+            onclick="closeModal('dateModal')"
+            class="text-slate-500 hover:text-slate-800 text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 font-bold"
+          >
+            ✕
+          </button>
+        </div>
+
+        <p
+          class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-3"
+        >
+          Quick Presets
+        </p>
+        <div class="grid grid-cols-3 gap-2 mb-5">
+          <button onclick="applyPreset('all', this)" class="date-preset active">
+            All Time
+          </button>
+          <button onclick="applyPreset('30', this)" class="date-preset">
+            Last 30 Days
+          </button>
+          <button onclick="applyPreset('90', this)" class="date-preset">
+            Last 90 Days
+          </button>
+          <button onclick="applyPreset('180', this)" class="date-preset">
+            Last 6 Months
+          </button>
+          <button onclick="applyPreset('365', this)" class="date-preset">
+            Last Year
+          </button>
+          <button onclick="applyPreset('custom', this)" class="date-preset">
+            Custom Range
+          </button>
+        </div>
+
+        <div id="customDates" class="hidden mb-5">
+          <p
+            class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2"
+          >
+            Custom Range
+          </p>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1"
+                >From</label
+              >
+              <input
+                id="dateFrom"
+                type="date"
+                class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1"
+                >To</label
+              >
+              <input
+                id="dateTo"
+                type="date"
+                class="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2">
+          <button
+            onclick="closeModal('dateModal')"
+            class="px-4 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-700 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onclick="applyDateRange()"
+            class="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm"
+          >
+            Apply
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════
+         FILTERS MODAL
+    ════════════════════════════════════════════════ -->
+    <div
+      id="filtersModal"
+      class="modal-bg fixed inset-0 bg-black/40 hidden items-center justify-center z-50"
+    >
+      <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
+        <div class="flex justify-between items-center mb-5">
+          <h2 class="text-base font-bold text-slate-900">Filters</h2>
+          <button
+            onclick="closeModal('filtersModal')"
+            class="text-slate-500 hover:text-slate-800 text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 font-bold"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div class="mb-4">
+          <p
+            class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2"
+          >
+            Sub-Category
+          </p>
+          <div class="flex flex-wrap gap-2" id="categoryFilterBtns">
+            <button
+              onclick="toggleFilter(this, 'category', 'all')"
+              data-group="category"
+              data-val="all"
+              class="filter-btn active"
+            >
+              All
+            </button>
+          </div>
+        </div>
+
+        <div class="mb-5">
+          <p
+            class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2"
+          >
+            Profit Margin
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              onclick="toggleFilter(this, 'margin', 'all')"
+              data-group="margin"
+              data-val="all"
+              class="filter-btn active"
+            >
+              All
+            </button>
+            <button
+              onclick="toggleFilter(this, 'margin', 'positive')"
+              data-group="margin"
+              data-val="positive"
+              class="filter-btn"
+            >
+              Positive Only
+            </button>
+            <button
+              onclick="toggleFilter(this, 'margin', 'negative')"
+              data-group="margin"
+              data-val="negative"
+              class="filter-btn"
+            >
+              Negative Only
+            </button>
+          </div>
+        </div>
+
+        <div class="flex justify-between gap-2">
+          <button
+            onclick="clearAllFilters()"
+            class="px-4 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-700 hover:bg-slate-50"
+          >
+            Reset All
+          </button>
+          <button
+            onclick="applyFilters()"
+            class="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm"
+          >
+            Apply Filters
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TOAST ──────────────────────────────────────────────── -->
+    <div
+      id="toast"
+      class="hidden fixed bottom-6 right-6 z-[100] bg-slate-900 text-white text-sm px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 font-semibold"
+    >
+      <span id="toastIcon">⏳</span>
+      <span id="toastMsg">Preparing…</span>
+    </div>
+
+    <script>
+      // ── Chart.js global defaults — dark text, visible everywhere including PDF ──
+      Chart.defaults.color = "#1e293b";
+      Chart.defaults.font.family = "'DM Sans', sans-serif";
+      Chart.defaults.font.size = 11;
+      Chart.defaults.font.weight = "600";
+      Chart.defaults.plugins.legend.labels.color = "#1e293b";
+
+      // ── State ──────────────────────────────────────────────────────
+      let revenueChart, categoryChart, marginChart, topChart;
+      let allData = {};
+      let tableRows = [];
+      let activeFilters = { category: "all", margin: "all" };
+      let activeDatePreset = "all";
+      let selectedPreset = "all";
+
+      document.addEventListener("DOMContentLoaded", loadAllData);
+
+      // ── Load all API data ──────────────────────────────────────────
+      async function loadAllData() {
+        try {
+          const [s, t, tp, m] = await Promise.all([
+            fetch("/api/dashboard/stats").then((r) => r.json()),
+            fetch("/api/dashboard/sales_trend").then((r) => r.json()),
+            fetch("/api/dashboard/top_products").then((r) => r.json()),
+            fetch("/api/dashboard/margin_by_category").then((r) => r.json()),
+          ]);
+          allData = { stats: s, trend: t, topProducts: tp, margins: m };
+          renderKPIs();
+          renderRevenueChart();
+          renderCategoryChart();
+          renderMarginChart();
+          renderTopChart();
+          buildTable();
+          buildCategoryBtns();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      // ── KPIs ───────────────────────────────────────────────────────
+      function renderKPIs() {
+        const s = allData.stats;
+        const fmt = (n, d = 2) =>
+          n.toLocaleString("en-US", {
+            minimumFractionDigits: d,
+            maximumFractionDigits: d,
+          });
+        document.getElementById("totalRevenue").textContent =
+          "$" + fmt(s.total_sales || 0);
+        document.getElementById("revenueMeta").textContent =
+          "From " + (s.total_records || 0).toLocaleString() + " records";
+        document.getElementById("totalTransactions").textContent = (
+          s.total_records || 0
+        ).toLocaleString();
+        document.getElementById("avgOrderValue").textContent =
+          "$" + fmt(s.avg_order_value || 0);
+        const m = allData.margins;
+        if (m?.labels?.length) {
+          const i = m.profits.reduce(
+            (b, v, j) => (v > m.profits[b] ? j : b),
+            0,
+          );
+          document.getElementById("topCategory").textContent = m.labels[i];
+          document.getElementById("topCategoryMeta").textContent =
+            "$" + fmt(m.profits[i] || 0, 0) + " total profit";
+        }
+      }
+
+      // ── Revenue Chart ──────────────────────────────────────────────
+      function renderRevenueChart() {
+        if (revenueChart) revenueChart.destroy();
+        const d = allData.trend;
+        const act = d.actual || [],
+          fct = d.forecast || [];
+        const lbl = [...(d.labels || []), ...(d.forecast_labels || [])];
+        const padA = [...act, ...Array(fct.length).fill(null)];
+        const padF = [...Array(act.length).fill(null), ...fct];
+
+        document.getElementById("trendSubtitle").textContent =
+          `${act.length} months actual` +
+          (fct.length ? ` + ${fct.length} month ARIMA forecast` : "");
+        document.getElementById("revenueLegend").innerHTML =
+          `<span style="display:flex;align-items:center;gap:5px;color:#1d4ed8">
+                 <span style="width:14px;height:3px;background:#3b82f6;border-radius:2px;display:inline-block"></span>Actual
+               </span>` +
+          (fct.length
+            ? `<span style="display:flex;align-items:center;gap:5px;color:#c2410c">
+                     <span style="width:14px;height:3px;background:#f97316;border-radius:2px;display:inline-block"></span>Forecast
+                   </span>`
+            : "");
+
+        revenueChart = new Chart(
+          document.getElementById("revenueChart").getContext("2d"),
+          {
+            type: "line",
+            data: {
+              labels: lbl,
+              datasets: [
+                {
+                  label: "Actual",
+                  data: padA,
+                  borderColor: "#3b82f6",
+                  backgroundColor: "rgba(59,130,246,.10)",
+                  fill: true,
+                  tension: 0.4,
+                  pointRadius: 3,
+                  pointBackgroundColor: "#2563eb",
+                  borderWidth: 2.5,
+                  spanGaps: false,
+                },
+                ...(fct.length
+                  ? [
+                      {
+                        label: "Forecast",
+                        data: padF,
+                        borderColor: "#f97316",
+                        borderDash: [6, 3],
+                        backgroundColor: "rgba(249,115,22,.07)",
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointBackgroundColor: "#ea580c",
+                        borderWidth: 2.5,
+                        spanGaps: false,
+                      },
+                    ]
+                  : []),
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: { mode: "index", intersect: false },
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: (c) =>
+                      " $" +
+                      c.parsed.y.toLocaleString("en-US", {
+                        maximumFractionDigits: 0,
+                      }),
+                  },
+                },
+              },
+              scales: {
+                x: {
+                  grid: { display: false },
+                  ticks: {
+                    color: "#1e293b",
+                    font: { size: 10, weight: "700" },
+                    maxRotation: 45,
+                  },
+                },
+                y: {
+                  grid: { color: "#e2e8f0" },
+                  ticks: {
+                    color: "#1e293b",
+                    font: { size: 10, weight: "700" },
+                    callback: (v) =>
+                      "$" + (v >= 1000 ? (v / 1000).toFixed(0) + "k" : v),
+                  },
+                },
+              },
+            },
+          },
+        );
+      }
+
+      // ── Category Doughnut ──────────────────────────────────────────
+      function renderCategoryChart() {
+        if (categoryChart) categoryChart.destroy();
+        const m = allData.margins;
+        const COLORS = [
+          "#3b82f6",
+          "#10b981",
+          "#f59e0b",
+          "#ef4444",
+          "#8b5cf6",
+          "#06b6d4",
+          "#f97316",
+          "#84cc16",
+          "#ec4899",
+          "#14b8a6",
+          "#a855f7",
+          "#64748b",
+          "#0ea5e9",
+          "#22c55e",
+          "#eab308",
+          "#dc2626",
+        ];
+        categoryChart = new Chart(
+          document.getElementById("categoryChart").getContext("2d"),
+          {
+            type: "doughnut",
+            data: {
+              labels: m.labels,
+              datasets: [
+                {
+                  data: m.profits.map((v) => Math.max(0, v)),
+                  backgroundColor: COLORS.slice(0, m.labels.length),
+                  borderWidth: 2,
+                  borderColor: "#fff",
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: "right",
+                  labels: {
+                    color: "#1e293b",
+                    font: { size: 10, weight: "700" },
+                    boxWidth: 11,
+                    padding: 10,
+                  },
+                },
+                tooltip: {
+                  callbacks: {
+                    label: (c) =>
+                      " $" +
+                      c.parsed.toLocaleString("en-US", {
+                        maximumFractionDigits: 0,
+                      }),
+                  },
+                },
+              },
+              cutout: "58%",
+            },
+          },
+        );
+      }
+
+      // ── Margin Bar Chart ───────────────────────────────────────────
+      function renderMarginChart() {
+        if (marginChart) marginChart.destroy();
+        const m = allData.margins;
+        marginChart = new Chart(
+          document.getElementById("marginChart").getContext("2d"),
+          {
+            type: "bar",
+            data: {
+              labels: m.labels,
+              datasets: [
+                {
+                  label: "Margin %",
+                  data: m.margins,
+                  backgroundColor: m.margins.map((v) =>
+                    v >= 0 ? "#10b981" : "#ef4444",
+                  ),
+                  borderRadius: 4,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: (c) => " " + c.parsed.y.toFixed(1) + "%",
+                  },
+                },
+              },
+              scales: {
+                x: {
+                  grid: { display: false },
+                  ticks: {
+                    color: "#1e293b",
+                    font: { size: 9, weight: "700" },
+                    maxRotation: 45,
+                  },
+                },
+                y: {
+                  grid: { color: "#e2e8f0" },
+                  ticks: {
+                    color: "#1e293b",
+                    font: { size: 10, weight: "700" },
+                    callback: (v) => v + "%",
+                  },
+                },
+              },
+            },
+          },
+        );
+      }
+
+      // ── Top Products Horizontal Bar ────────────────────────────────
+      function renderTopChart() {
+        if (topChart) topChart.destroy();
+        const tp = allData.topProducts;
+        topChart = new Chart(
+          document.getElementById("topProductsChart").getContext("2d"),
+          {
+            type: "bar",
+            data: {
+              labels: tp.labels,
+              datasets: [
+                {
+                  label: "Units Sold",
+                  data: tp.values,
+                  backgroundColor: "#3b82f6",
+                  borderRadius: 4,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              indexAxis: "y",
+              plugins: { legend: { display: false } },
+              scales: {
+                x: {
+                  grid: { color: "#e2e8f0" },
+                  ticks: {
+                    color: "#1e293b",
+                    font: { size: 10, weight: "700" },
+                  },
+                },
+                y: {
+                  grid: { display: false },
+                  ticks: {
+                    color: "#1e293b",
+                    font: { size: 10, weight: "700" },
+                  },
+                },
+              },
+            },
+          },
+        );
+      }
+
+      // ── Table ──────────────────────────────────────────────────────
+      function buildTable() {
+        const m = allData.margins,
+          tp = allData.topProducts;
+        tableRows = m.labels.map((lbl, i) => {
+          const margin = m.margins[i] || 0,
+            profit = m.profits[i] || 0;
+          const sales = margin !== 0 ? profit / (margin / 100) : 0;
+          const tpI = tp?.labels.indexOf(lbl) ?? -1;
+          return {
+            name: lbl,
+            sales,
+            profit,
+            margin,
+            units: tpI >= 0 ? tp.values[tpI] : 0,
+          };
+        });
+        drawTable(tableRows);
+      }
+
+      function drawTable(rows) {
+        const tbody = document.getElementById("categoryTableBody");
+        if (!rows.length) {
+          tbody.innerHTML =
+            '<tr><td colspan="6" style="padding:28px;text-align:center;color:#475569;font-weight:600">No data</td></tr>';
+          return;
+        }
+        const fmt = (n, d = 0) =>
+          parseFloat(n).toLocaleString("en-US", { maximumFractionDigits: d });
+        tbody.innerHTML = rows
+          .map((r) => {
+            const m = parseFloat(r.margin);
+            const profitColor = m < 0 ? "#7f1d1d" : "#14532d";
+            const mbadge =
+              m < 0
+                ? `<span class="badge-neg">${m.toFixed(1)}%</span>`
+                : m < 5
+                  ? `<span class="badge-thin2">${m.toFixed(1)}%</span>`
+                  : `<span class="badge-pos">${m.toFixed(1)}%</span>`;
+            const sbadge =
+              m < 0
+                ? '<span class="badge-loss">Loss</span>'
+                : m < 5
+                  ? '<span class="badge-thin">Thin</span>'
+                  : '<span class="badge-healthy">Healthy</span>';
+            return `<tr style="border-bottom:1px solid #f1f5f9;">
+                <td class="tbl-td-strong">${r.name}</td>
+                <td class="tbl-td" style="text-align:right">$${fmt(r.sales)}</td>
+                <td style="padding:10px 16px;text-align:right;font-weight:800;color:${profitColor}">$${fmt(r.profit)}</td>
+                <td style="padding:10px 16px;text-align:right">${mbadge}</td>
+                <td class="tbl-td" style="text-align:right">${fmt(r.units)}</td>
+                <td style="padding:10px 16px;text-align:right">${sbadge}</td>
+              </tr>`;
+          })
+          .join("");
+      }
+
+      function filterTable() {
+        const q = document
+          .getElementById("tableSearch")
+          .value.toLowerCase()
+          .trim();
+        drawTable(
+          q
+            ? tableRows.filter((r) => r.name.toLowerCase().includes(q))
+            : tableRows,
+        );
+      }
+
+      function buildCategoryBtns() {
+        const c = document.getElementById("categoryFilterBtns");
+        (allData.margins?.labels || []).forEach((cat) => {
+          const b = document.createElement("button");
+          b.textContent = cat;
+          b.dataset.group = "category";
+          b.dataset.val = cat;
+          b.className = "filter-btn";
+          b.onclick = () => toggleFilter(b, "category", cat);
+          c.appendChild(b);
+        });
+      }
+
+      // ── Filter helpers ─────────────────────────────────────────────
+      function toggleFilter(btn, group, val) {
+        document
+          .querySelectorAll(`[data-group="${group}"]`)
+          .forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        activeFilters[group] = val;
+      }
+
+      function applyFilters() {
+        closeModal("filtersModal");
+        let f = [...tableRows];
+        if (activeFilters.margin === "positive")
+          f = f.filter((r) => r.margin >= 0);
+        if (activeFilters.margin === "negative")
+          f = f.filter((r) => r.margin < 0);
+        if (activeFilters.category !== "all")
+          f = f.filter((r) => r.name === activeFilters.category);
+        drawTable(f);
+        const n = Object.values(activeFilters).filter(
+          (v) => v !== "all",
+        ).length;
+        const b = document.getElementById("activeFilterCount");
+        n > 0
+          ? ((b.textContent = n), b.classList.remove("hidden"))
+          : b.classList.add("hidden");
+        updateStrip();
+        showToast("Filters applied ✓", "info");
+      }
+
+      function clearAllFilters() {
+        activeFilters = { category: "all", margin: "all" };
+        activeDatePreset = "all";
+        document.getElementById("dateLabel").textContent = "All Time";
+        document.getElementById("activeFilterCount").classList.add("hidden");
+        document
+          .querySelectorAll(".filter-btn,.date-preset")
+          .forEach((b) => b.classList.remove("active"));
+        document
+          .querySelectorAll('[data-val="all"],.date-preset:first-child')
+          .forEach((b) => b.classList.add("active"));
+        drawTable(tableRows);
+        updateStrip();
+        closeModal("filtersModal");
+        closeModal("dateModal");
+      }
+
+      function updateStrip() {
+        const parts = [];
+        if (activeDatePreset !== "all")
+          parts.push(document.getElementById("dateLabel").textContent);
+        if (activeFilters.category !== "all")
+          parts.push("Category: " + activeFilters.category);
+        if (activeFilters.margin !== "all")
+          parts.push("Margin: " + activeFilters.margin);
+        const strip = document.getElementById("activeFiltersStrip");
+        if (parts.length) {
+          document.getElementById("filterChips").innerHTML = parts
+            .map(
+              (p) =>
+                `<span style="background:#dbeafe;color:#1e40af;border-radius:20px;padding:2px 10px">${p}</span>`,
+            )
+            .join("");
+          strip.classList.remove("hidden");
+          strip.classList.add("flex");
+        } else {
+          strip.classList.add("hidden");
+          strip.classList.remove("flex");
+        }
+      }
+
+      // ── Date Range ─────────────────────────────────────────────────
+      function applyPreset(preset, btn) {
+        selectedPreset = preset;
+        document
+          .querySelectorAll(".date-preset")
+          .forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        document
+          .getElementById("customDates")
+          .classList.toggle("hidden", preset !== "custom");
+      }
+      function applyDateRange() {
+        const labels = {
+          all: "All Time",
+          30: "Last 30 Days",
+          90: "Last 90 Days",
+          180: "Last 6 Months",
+          365: "Last Year",
+          custom: "Custom",
+        };
+        if (selectedPreset === "custom") {
+          const f = document.getElementById("dateFrom").value,
+            t = document.getElementById("dateTo").value;
+          if (!f || !t) {
+            alert("Select both dates.");
+            return;
+          }
+          document.getElementById("dateLabel").textContent = `${f} → ${t}`;
+        } else {
+          document.getElementById("dateLabel").textContent =
+            labels[selectedPreset];
+        }
+        activeDatePreset = selectedPreset;
+        closeModal("dateModal");
+        updateStrip();
+        showToast("Date range applied", "info");
+      }
+
+      // ── Modal helpers ──────────────────────────────────────────────
+      function openDateModal() {
+        openModal("dateModal");
+      }
+      function openFiltersModal() {
+        openModal("filtersModal");
+      }
+      function openModal(id) {
+        const m = document.getElementById(id);
+        m.classList.remove("hidden");
+        m.classList.add("flex");
+      }
+      function closeModal(id) {
+        const m = document.getElementById(id);
+        m.classList.add("hidden");
+        m.classList.remove("flex");
+      }
+      ["dateModal", "filtersModal"].forEach((id) => {
+        document.getElementById(id).addEventListener("click", (e) => {
+          if (e.target === document.getElementById(id)) closeModal(id);
+        });
+      });
+
+      // ── Toast ──────────────────────────────────────────────────────
+      function showToast(msg, type = "info") {
+        const t = document.getElementById("toast");
+        document.getElementById("toastIcon").textContent =
+          type === "success" ? "✅" : type === "info" ? "ℹ️" : "⏳";
+        document.getElementById("toastMsg").textContent = msg;
+        t.classList.remove("hidden");
+        setTimeout(() => t.classList.add("hidden"), 3000);
+      }
+
+      // ── PDF EXPORT ─────────────────────────────────────────────────
+      async function exportToPDF() {
+        const btn = document.getElementById("exportBtn");
+        const btnText = document.getElementById("exportBtnText");
+        const btnIcon = document.getElementById("exportBtnIcon");
+        const bar = document.getElementById("pdfProgressBar");
+        const prog = document.getElementById("pdfProgress");
+
+        btn.classList.add("exporting");
+        btnText.textContent = "Generating…";
+        btnIcon.textContent = "⏳";
+        bar.classList.remove("hidden");
+        showToast("Preparing your PDF…", "wait");
+
+        try {
+          const { jsPDF } = window.jspdf;
+          prog.style.width = "12%";
+          document.getElementById("pdfFooter").classList.remove("hidden");
+          await new Promise((r) => setTimeout(r, 120));
+
+          prog.style.width = "35%";
+          document.getElementById("toastMsg").textContent = "Capturing charts…";
+
+          const el = document.getElementById("reportContent");
+         const canvas = await html2canvas(el, {
+  scale: 3,
+  useCORS: true,
+  backgroundColor: "#ffffff",
+  logging: false,
+  windowWidth: el.scrollWidth,
+  windowHeight: el.scrollHeight,
+});
+
+// Force better clarity
+const imgData = canvas.toDataURL("image/png");
+
+
+          document.getElementById("pdfFooter").classList.add("hidden");
+          prog.style.width = "62%";
+          document.getElementById("toastMsg").textContent = "Building PDF…";
+
+          const pdf = new jsPDF({
+            orientation: "portrait",
+            unit: "mm",
+            format: "a4",
+          });
+          const pageW = pdf.internal.pageSize.getWidth();
+          const pageH = pdf.internal.pageSize.getHeight();
+          const HEADER = 20,
+            FOOTER = 8,
+            usableH = pageH - HEADER - FOOTER;
+
+          // Dark header
+          pdf.setFillColor(15, 23, 42);
+          pdf.rect(0, 0, pageW, HEADER, "F");
+          pdf.setFontSize(13);
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(255, 255, 255);
+          pdf.text("StockGenius  •  Analytics Report", 10, 13);
+          pdf.setFontSize(7.5);
+          pdf.setFont("helvetica", "normal");
+          const now = new Date().toLocaleString("en-US", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          pdf.text("Generated: " + now, pageW - 8, 13, { align: "right" });
+          const filterTxt = buildFilterText();
+          if (filterTxt) {
+            pdf.setTextColor(0, 0, 0);
+            pdf.setFontSize(6.5);
+            pdf.text(filterTxt, 10, 18.5);
+          }
+
+          // Tile content across pages
+          const imgH_mm = (canvas.height / canvas.width) * pageW;
+          let sliceTop = 0,
+            pageNum = 0;
+
+          while (sliceTop < imgH_mm) {
+            if (pageNum > 0) {
+              pdf.addPage();
+              pdf.setFillColor(15, 23, 42);
+              pdf.rect(0, 0, pageW, HEADER, "F");
+              pdf.setFontSize(10);
+              pdf.setFont("helvetica", "bold");
+              pdf.setTextColor(255, 255, 255);
+              pdf.text("StockGenius  •  Analytics Report (cont.)", 10, 13);
+            }
+            pageNum++;
+            const sliceH_mm = Math.min(usableH, imgH_mm - sliceTop);
+            const sliceH_px = Math.round((sliceH_mm / imgH_mm) * canvas.height);
+            const sliceTop_px = Math.round(
+              (sliceTop / imgH_mm) * canvas.height,
+            );
+
+            const chunk = document.createElement("canvas");
+            chunk.width = canvas.width;
+            chunk.height = sliceH_px;
+            chunk
+              .getContext("2d")
+              .drawImage(
+                canvas,
+                0,
+                sliceTop_px,
+                canvas.width,
+                sliceH_px,
+                0,
+                0,
+                canvas.width,
+                sliceH_px,
+              );
+            pdf.addImage(
+              chunk.toDataURL("image/png"),
+              "PNG",
+              0,
+              HEADER,
+              pageW,
+              sliceH_mm,
+            );
+            sliceTop += sliceH_mm;
+          }
+
+          // Page numbers
+          const total = pdf.internal.getNumberOfPages();
+          for (let p = 1; p <= total; p++) {
+            pdf.setPage(p);
+            pdf.setFontSize(7);
+            pdf.setFont("helvetica", "normal");
+            pdf.setTextColor(148, 163, 184);
+            pdf.text(
+              `Page ${p} of ${total}  •  StockGenius Analytics  •  Confidential`,
+              pageW / 2,
+              pageH - 3,
+              { align: "center" },
+            );
+          }
+
+          prog.style.width = "92%";
+          document.getElementById("toastMsg").textContent = "Saving file…";
+          await new Promise((r) => setTimeout(r, 150));
+
+          const fname = `StockGenius_Report_${new Date().toISOString().slice(0, 10)}.pdf`;
+          pdf.save(fname);
+
+          prog.style.width = "100%";
+          document.getElementById("toastIcon").textContent = "✅";
+          document.getElementById("toastMsg").textContent = `Saved: ${fname}`;
+        } catch (err) {
+          console.error("PDF error:", err);
+          document.getElementById("toastIcon").textContent = "❌";
+          document.getElementById("toastMsg").textContent =
+            "Export failed — check console.";
+        } finally {
+          btn.classList.remove("exporting");
+          btnText.textContent = "Export PDF";
+          btnIcon.textContent = "⬇️";
+          setTimeout(() => {
+            bar.classList.add("hidden");
+            prog.style.width = "0%";
+            document.getElementById("toast").classList.add("hidden");
+          }, 4000);
+        }
+      }
+
+      function buildFilterText() {
+        const p = [];
+        if (activeDatePreset !== "all")
+          p.push("Period: " + document.getElementById("dateLabel").textContent);
+        if (activeFilters.category !== "all")
+          p.push("Category: " + activeFilters.category);
+        if (activeFilters.margin !== "all")
+          p.push("Margin: " + activeFilters.margin);
+        return p.join("   |   ");
+      }
+    </script>
   </body>
 </html>
