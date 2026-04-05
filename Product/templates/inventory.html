@@ -5,274 +5,1117 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Inventory Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "DM Sans", sans-serif;
+      }
+      .modal-overlay {
+        backdrop-filter: blur(4px);
+      }
+      .card-hover {
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .card-hover:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+      }
+      .btn-primary {
+        transition:
+          background 0.15s ease,
+          opacity 0.15s ease;
+      }
+      .btn-primary:hover {
+        opacity: 0.88;
+      }
+      .stock-bar {
+        transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .img-drop-zone {
+        border: 2px dashed #d1d5db;
+        border-radius: 12px;
+        transition:
+          border-color 0.2s,
+          background 0.2s;
+        cursor: pointer;
+      }
+      .img-drop-zone:hover,
+      .img-drop-zone.dragover {
+        border-color: #2563eb;
+        background: #eff6ff;
+      }
+      .img-drop-zone input[type="file"] {
+        display: none;
+      }
+    </style>
   </head>
-
-  <body class="bg-gray-100">
+  <body class="bg-gray-50">
     <div class="flex h-screen">
-      <!-- SIDEBAR -->
       {% include "sidebar.html" %}
-
-      <!-- MAIN CONTENT -->
       <main class="flex-1 p-6 overflow-y-auto">
         <!-- TOP BAR -->
         <div class="flex justify-between items-center mb-6">
-          <h1 class="text-xl font-semibold">Inventory Management</h1>
+          <div>
+            <h1 class="text-2xl font-bold text-gray-900">
+              Inventory Management
+            </h1>
+            <p class="text-sm text-gray-500 mt-0.5">
+              Track, manage and update your product stock
+            </p>
+          </div>
           <input
+            id="searchInput"
             type="text"
-            placeholder="Search products, users..."
-            class="border rounded-md px-4 py-2 text-sm w-64"
+            placeholder="🔍  Search by product or region..."
+            class="border border-gray-200 rounded-xl px-4 py-2.5 text-sm w-72 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            oninput="applyFilters()"
           />
         </div>
 
-        <!-- ACTION BAR -->
-        <div class="flex justify-between items-center mb-4">
-          <div class="flex gap-2">
-           <button onclick="openAddProductModal()" class="bg-blue-600 text-white px-4 py-2 rounded-md text-sm">
-  + Add Product
-</button>
-            <button class="border px-4 py-2 rounded-md text-sm">Filters</button>
-          </div>
+        <!-- FILTER BAR -->
+        <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
+          <div class="flex gap-2 flex-wrap">
+            <button
+              onclick="openAddProductModal()"
+              class="btn-primary bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm"
+            >
+              + Add Product
+            </button>
 
-          <div class="flex gap-2">
-            <select class="border px-3 py-2 rounded-md text-sm">
-              <option>All Categories</option>
+            <!-- FIX: uses all_categories passed from server (not just paginated products) -->
+            <select
+              id="categoryFilter"
+              onchange="applyFilters()"
+              class="border border-gray-200 px-3 py-2.5 rounded-xl text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Categories</option>
+              {% for cat in all_categories %}
+              <option value="{{ cat | lower }}">{{ cat }}</option>
+              {% endfor %}
             </select>
-            <select class="border px-3 py-2 rounded-md text-sm">
-              <option>All Status</option>
+
+            <select
+              id="statusFilter"
+              onchange="applyFilters()"
+              class="border border-gray-200 px-3 py-2.5 rounded-xl text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Status</option>
+              <option value="low_stock">Low Stock</option>
+              <option value="near_expiry">Near Expiry</option>
+              <option value="in_stock">In Stock</option>
             </select>
+
+            <select
+              id="sortFilter"
+              onchange="applyFilters()"
+              class="border border-gray-200 px-3 py-2.5 rounded-xl text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Sort By</option>
+              <option value="sales_desc">Sales: High to Low</option>
+              <option value="sales_asc">Sales: Low to High</option>
+              <option value="stock_asc">Stock: Low to High</option>
+              <option value="name_asc">Name: A to Z</option>
+            </select>
+
+            <button
+              onclick="resetFilters()"
+              class="border border-gray-200 px-3 py-2.5 rounded-xl text-sm bg-white shadow-sm text-gray-500 hover:bg-gray-100"
+            >
+              Reset
+            </button>
           </div>
         </div>
 
         <!-- PRODUCTS GRID -->
-       
-         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-  {% if products %}
-    {% for product in products %}
-    <div class="bg-white rounded-2xl shadow-sm border p-4">
-     <img
-  src="{{ product.image }}"
-  class="rounded-lg mb-3 w-full h-40 object-cover"
-/>
-
-      <h3 class="font-semibold text-lg text-gray-800">
-        {{ product.sub_category }}
-      </h3>
-
-      <p class="text-xs text-gray-500 mb-3">
-        {{ product.region }}, {{ product.state }}
-      </p>
-
-      <!-- Stock Progress -->
-      <div class="mb-2 flex justify-between text-sm">
-        <span class="text-gray-600">
-          {{ product.avg_stock_level|int }} / {{ product.avg_reorder_point|int }}
-        </span>
-
-        {% if product.low_stock == 1 %}
-          <span class="text-red-500 font-medium">Low Stock</span>
-        {% elif product.near_expiry == 1 %}
-          <span class="text-yellow-500 font-medium">Near Expiry</span>
-        {% else %}
-          <span class="text-green-500 font-medium">High Stock</span>
-        {% endif %}
-      </div>
-
-      <div class="w-full bg-gray-200 rounded-full h-2 mb-4">
-        {% set progress = (product.avg_stock_level / product.avg_reorder_point * 100) if product.avg_reorder_point and product.avg_reorder_point > 0 else 100 %}
         <div
-          class="h-2 rounded-full
-          {% if product.low_stock == 1 %}
-            bg-red-500
-          {% elif product.near_expiry == 1 %}
-            bg-yellow-500
-          {% else %}
-            bg-green-500
-          {% endif %}"
-          style="width: {{ 100 if progress > 100 else progress }}%;"
-        ></div>
-      </div>
+          id="productGrid"
+          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"
+        >
+          {% if products %} {% for product in products %}
+          <div
+            class="product-card bg-white rounded-2xl shadow-sm border border-gray-100 p-4 card-hover"
+            data-name="{{ product.sub_category | lower }}"
+            data-region="{{ product.region | lower if product.region else '' }}"
+            data-category="{{ product.category | lower if product.category else '' }}"
+            data-status="{% if product.low_stock == 1 %}low_stock{% elif product.near_expiry == 1 %}near_expiry{% else %}in_stock{% endif %}"
+            data-sales="{{ product.total_sales }}"
+            data-stock="{{ product.avg_stock_level }}"
+          >
+            <img
+              src="{{ product.image }}"
+              class="rounded-xl mb-3 w-full h-40 object-cover"
+              onerror="this.src='https://via.placeholder.com/300x160?text={{ product.sub_category }}'"
+            />
 
-      <div class="flex justify-between items-center mb-3">
-        <span class="text-2xl font-bold text-gray-800">
-          ${{ product.total_sales }}
-        </span>
+            <div class="flex justify-between items-start mb-1">
+              <h3 class="font-semibold text-base text-gray-800 leading-tight">
+                {{ product.sub_category }}
+              </h3>
+              {% if product.low_stock == 1 %}
+              <span
+                class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-lg font-medium whitespace-nowrap"
+                >Low Stock</span
+              >
+              {% elif product.near_expiry == 1 %}
+              <span
+                class="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-lg font-medium whitespace-nowrap"
+                >Near Expiry</span
+              >
+              {% else %}
+              <span
+                class="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-lg font-medium whitespace-nowrap"
+                >In Stock</span
+              >
+              {% endif %}
+            </div>
 
-        {% if product.low_stock == 1 %}
-          <span class="text-xs bg-red-100 text-red-600 px-3 py-1 rounded-lg">Low Stock</span>
-        {% elif product.near_expiry == 1 %}
-          <span class="text-xs bg-yellow-100 text-yellow-600 px-3 py-1 rounded-lg">Near Expiry</span>
-        {% else %}
-          <span class="text-xs bg-green-100 text-green-600 px-3 py-1 rounded-lg">In Stock</span>
-        {% endif %}
-      </div>
+            <p class="text-xs text-gray-400 mb-3">
+              {{ product.region if product.region else 'N/A' }}, {{
+              product.state if product.state else 'N/A' }}
+            </p>
 
-      <div class="text-sm text-gray-600 space-y-1 mb-4">
-        <p><strong>Qty:</strong> {{ product.total_quantity }}</p>
-        <p><strong>Profit:</strong> ${{ product.total_profit }}</p>
-        <p><strong>Avg Discount:</strong> {{ product.avg_discount }}%</p>
-      </div>
+            <div class="mb-1 flex justify-between text-xs text-gray-500">
+              <span>Stock</span>
+              <span
+                >{{ product.avg_stock_level|int }} / {{
+                product.avg_reorder_point|int }}</span
+              >
+            </div>
+            <div class="w-full bg-gray-100 rounded-full h-1.5 mb-4">
+              {% set progress = (product.avg_stock_level /
+              product.avg_reorder_point * 100) if product.avg_reorder_point and
+              product.avg_reorder_point > 0 else 100 %}
+              <div
+                class="stock-bar h-1.5 rounded-full {% if product.low_stock == 1 %}bg-red-500{% elif product.near_expiry == 1 %}bg-yellow-500{% else %}bg-green-500{% endif %}"
+                style="width: {{ [progress, 100] | min }}%;"
+              ></div>
+            </div>
 
-      <div class="flex gap-2">
-        <button class="flex-1 bg-blue-600 text-white py-2 rounded-xl text-sm font-medium">
-          Edit
-        </button>
-    
-        <button class="w-10 h-10 border rounded-xl text-gray-500">🗑</button>
-      </div>
-    </div>
-    {% endfor %}
-  {% else %}
-    <p class="text-gray-500">No inventory data found.</p>
-  {% endif %}
-</div>
-<div class="mt-8 flex justify-center items-center gap-2">
-  {% if page > 1 %}
-    <a href="{{ url_for('inventory', page=page-1) }}"
-       class="px-4 py-2 border rounded-lg bg-white hover:bg-gray-100 text-sm">
-      Previous
-    </a>
-  {% endif %}
+            <div class="flex justify-between items-center mb-3">
+              <span class="text-xl font-bold text-gray-900"
+                >${{ product.total_sales }}</span
+              >
+              <span class="text-xs text-gray-400"
+                >{{ product.category if product.category else '' }}</span
+              >
+            </div>
 
-  {% for p in range(1, total_pages + 1) %}
-    <a href="{{ url_for('inventory', page=p) }}"
-       class="px-4 py-2 rounded-lg text-sm
-       {% if p == page %}
-         bg-blue-600 text-white
-       {% else %}
-         border bg-white hover:bg-gray-100
-       {% endif %}">
-      {{ p }}
-    </a>
-  {% endfor %}
+            <div
+              class="text-xs text-gray-500 space-y-1 mb-4 border-t border-gray-50 pt-3"
+            >
+              <div class="flex justify-between">
+                <span>Qty</span
+                ><span class="font-medium text-gray-700"
+                  >{{ product.total_quantity }}</span
+                >
+              </div>
+              <div class="flex justify-between">
+                <span>Profit</span
+                ><span class="font-medium text-gray-700"
+                  >${{ product.total_profit }}</span
+                >
+              </div>
+              <div class="flex justify-between">
+                <span>Avg Discount</span
+                ><span class="font-medium text-gray-700"
+                  >{{ product.avg_discount }}%</span
+                >
+              </div>
+            </div>
 
-  {% if page < total_pages %}
-    <a href="{{ url_for('inventory', page=page+1) }}"
-       class="px-4 py-2 border rounded-lg bg-white hover:bg-gray-100 text-sm">
-      Next
-    </a>
-  {% endif %}
-</div>
+            <div class="flex gap-2">
+              <!-- FIX: pass URL-encoded sub_category, not product.id -->
+              <button
+                onclick="openEditModal('{{ product.sub_category | urlencode }}')"
+                class="flex-1 bg-blue-600 text-white py-2 rounded-xl text-sm font-semibold btn-primary"
+              >
+                Edit
+              </button>
+              <button
+                onclick="openDeleteModal('{{ product.sub_category | urlencode }}', '{{ product.sub_category }}')"
+                class="w-10 h-10 border border-gray-200 rounded-xl text-gray-400 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-colors flex items-center justify-center text-base"
+              >
+                🗑
+              </button>
+            </div>
+          </div>
+          {% endfor %} {% else %}
+          <div class="col-span-4 text-center py-16 text-gray-400">
+            <div class="text-5xl mb-3">📦</div>
+            <p class="text-lg font-medium">No inventory data found.</p>
+          </div>
+          {% endif %}
         </div>
-        <!-- ADD PRODUCT MODAL -->
-<div id="addProductModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
-  <div class="bg-white w-full max-w-2xl rounded-2xl shadow-xl p-6 relative">
-    <div class="flex justify-between items-center mb-4">
-      <h2 class="text-xl font-semibold text-gray-800">Add New Product</h2>
-      <button onclick="closeAddProductModal()" class="text-gray-500 text-2xl leading-none">&times;</button>
-    </div>
 
-    <form id="addProductForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
-        <input name="product_name" type="text" class="w-full border rounded-lg px-3 py-2" required />
-      </div>
+        <div id="noResults" class="hidden text-center py-16 text-gray-400">
+          <div class="text-5xl mb-3">🔍</div>
+          <p class="text-lg font-medium">No products match your filters.</p>
+          <button
+            onclick="resetFilters()"
+            class="mt-3 text-blue-500 text-sm underline"
+          >
+            Reset filters
+          </button>
+        </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
-        <input name="category" type="text" class="w-full border rounded-lg px-3 py-2" required />
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Sub Category</label>
-        <input name="sub_category" type="text" class="w-full border rounded-lg px-3 py-2" required />
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Sales</label>
-        <input name="sales" type="number" step="0.01" value="0" class="w-full border rounded-lg px-3 py-2" />
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-        <input name="quantity" type="number" value="0" class="w-full border rounded-lg px-3 py-2" />
-      </div>
-
-      <div>
-   <label class="block text-sm font-medium text-gray-700 mb-1">Discount (%)</label>
-<input name="discount" type="number" step="0.01" min="0" max="100" value="0" class="w-full border rounded-lg px-3 py-2" />
-<p class="text-xs text-gray-500 mt-1">Enter percentage like 20 for 20%</p>
-        
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Profit</label>
-        <input name="profit" type="number" step="0.01" value="0" class="w-full border rounded-lg px-3 py-2" />
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Order Date</label>
-        <input name="order_date" type="date" class="w-full border rounded-lg px-3 py-2" />
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Stock Level</label>
-        <input name="stock_level" type="number" value="0" class="w-full border rounded-lg px-3 py-2" />
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Reorder Point</label>
-        <input name="reorder_point" type="number" value="0" class="w-full border rounded-lg px-3 py-2" />
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Shelf Life Days</label>
-        <input name="shelf_life_days" type="number" value="365" class="w-full border rounded-lg px-3 py-2" />
-      </div>
-
-      <div class="md:col-span-2 flex justify-end gap-3 mt-2">
-        <button type="button" onclick="closeAddProductModal()" class="border px-4 py-2 rounded-lg">
-          Cancel
-        </button>
-        <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded-lg">
-          Save Product
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
+        <!-- PAGINATION -->
+        <div class="mt-8 flex justify-center items-center gap-2">
+          {% if page > 1 %}
+          <a
+            href="{{ url_for('inventory', page=page-1) }}"
+            class="px-4 py-2 border rounded-xl bg-white hover:bg-gray-100 text-sm font-medium shadow-sm"
+            >Prev</a
+          >
+          {% endif %} {% for p in range(1, total_pages + 1) %}
+          <a
+            href="{{ url_for('inventory', page=p) }}"
+            class="px-4 py-2 rounded-xl text-sm font-medium shadow-sm {% if p == page %}bg-blue-600 text-white{% else %}border bg-white hover:bg-gray-100{% endif %}"
+          >
+            {{ p }}
+          </a>
+          {% endfor %} {% if page < total_pages %}
+          <a
+            href="{{ url_for('inventory', page=page+1) }}"
+            class="px-4 py-2 border rounded-xl bg-white hover:bg-gray-100 text-sm font-medium shadow-sm"
+            >Next</a
+          >
+          {% endif %}
+        </div>
       </main>
     </div>
+
+    <!-- ADD MODAL -->
+    <div
+      id="addProductModal"
+      class="modal-overlay fixed inset-0 bg-black/40 hidden items-center justify-center z-50"
+    >
+      <div
+        class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 relative mx-4 max-h-[90vh] overflow-y-auto"
+      >
+        <div class="flex justify-between items-center mb-5">
+          <div>
+            <h2 class="text-xl font-bold text-gray-900">Add New Product</h2>
+            <p class="text-sm text-gray-400">Fill in the details below</p>
+          </div>
+          <button
+            onclick="closeAddProductModal()"
+            class="text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"
+          >
+            &times;
+          </button>
+        </div>
+        <form id="addProductForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Product Image</label
+            >
+            <div
+              id="addImgDropZone"
+              class="img-drop-zone flex flex-col items-center justify-center py-6 px-4 text-center"
+              onclick="document.getElementById('addImageInput').click()"
+            >
+              <img
+                id="addImgPreview"
+                src=""
+                alt=""
+                class="hidden w-full max-h-40 object-cover rounded-lg mb-3"
+              />
+              <div id="addImgPlaceholder">
+                <div class="text-3xl mb-1">🖼️</div>
+                <p class="text-sm text-gray-500">
+                  Click or drag and drop to upload
+                </p>
+                <p class="text-xs text-gray-400 mt-0.5">
+                  PNG, JPG, WEBP — max 5 MB
+                </p>
+              </div>
+              <input
+                id="addImageInput"
+                type="file"
+                name="image"
+                accept="image/*"
+                onchange="
+                  previewImage(this, 'addImgPreview', 'addImgPlaceholder')
+                "
+              />
+            </div>
+            <button
+              type="button"
+              id="addClearImgBtn"
+              onclick="
+                clearImage(
+                  'addImageInput',
+                  'addImgPreview',
+                  'addImgPlaceholder',
+                  'addClearImgBtn',
+                )
+              "
+              class="hidden mt-1 text-xs text-red-400 hover:text-red-600 underline"
+            >
+              Remove image
+            </button>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Product Name <span class="text-red-500">*</span></label
+            ><input
+              name="product_name"
+              type="text"
+              required
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Category <span class="text-red-500">*</span></label
+            ><input
+              name="category"
+              type="text"
+              required
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Sub Category <span class="text-red-500">*</span></label
+            ><input
+              name="sub_category"
+              type="text"
+              required
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Sales ($)</label
+            ><input
+              name="sales"
+              type="number"
+              step="0.01"
+              value="0"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Quantity</label
+            ><input
+              name="quantity"
+              type="number"
+              value="0"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Discount (%)</label
+            ><input
+              name="discount"
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              value="0"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p class="text-xs text-gray-400 mt-1">Enter 20 for 20%</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Profit ($)</label
+            ><input
+              name="profit"
+              type="number"
+              step="0.01"
+              value="0"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Order Date</label
+            ><input
+              name="order_date"
+              type="date"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Stock Level</label
+            ><input
+              name="stock_level"
+              type="number"
+              value="0"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Reorder Point</label
+            ><input
+              name="reorder_point"
+              type="number"
+              value="0"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Shelf Life (Days)</label
+            ><input
+              name="shelf_life_days"
+              type="number"
+              value="365"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div
+            id="addError"
+            class="md:col-span-2 hidden text-sm text-red-500 bg-red-50 rounded-xl px-4 py-2.5"
+          ></div>
+          <div
+            class="md:col-span-2 flex justify-end gap-3 mt-2 pt-4 border-t border-gray-100"
+          >
+            <button
+              type="button"
+              onclick="closeAddProductModal()"
+              class="border border-gray-200 px-5 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              id="addSubmitBtn"
+              class="btn-primary bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-semibold"
+            >
+              Save Product
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- EDIT MODAL -->
+    <div
+      id="editProductModal"
+      class="modal-overlay fixed inset-0 bg-black/40 hidden items-center justify-center z-50"
+    >
+      <div
+        class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 relative mx-4 max-h-[90vh] overflow-y-auto"
+      >
+        <div class="flex justify-between items-center mb-5">
+          <div>
+            <h2 class="text-xl font-bold text-gray-900">Edit Product</h2>
+            <p class="text-sm text-gray-400" id="editProductSubtitle">
+              Update product details
+            </p>
+          </div>
+          <button
+            onclick="closeEditModal()"
+            class="text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"
+          >
+            &times;
+          </button>
+        </div>
+        <div id="editLoading" class="flex items-center justify-center py-12">
+          <div
+            class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"
+          ></div>
+          <span class="ml-3 text-gray-400 text-sm">Loading product...</span>
+        </div>
+        <form
+          id="editProductForm"
+          class="grid grid-cols-1 md:grid-cols-2 gap-4 hidden"
+        >
+          <input
+            type="hidden"
+            name="sub_category_key"
+            id="editSubCategoryKey"
+          />
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Product Image</label
+            >
+            <div
+              id="editImgDropZone"
+              class="img-drop-zone flex flex-col items-center justify-center py-6 px-4 text-center"
+              onclick="document.getElementById('editImageInput').click()"
+            >
+              <img
+                id="editImgPreview"
+                src=""
+                alt=""
+                class="hidden w-full max-h-40 object-cover rounded-lg mb-3"
+              />
+              <div id="editImgPlaceholder">
+                <div class="text-3xl mb-1">🖼️</div>
+                <p class="text-sm text-gray-500" id="editImgHint">
+                  Click or drag and drop to replace image
+                </p>
+                <p class="text-xs text-gray-400 mt-0.5">
+                  PNG, JPG, WEBP — max 5 MB
+                </p>
+              </div>
+              <input
+                id="editImageInput"
+                type="file"
+                name="image"
+                accept="image/*"
+                onchange="
+                  previewImage(this, 'editImgPreview', 'editImgPlaceholder')
+                "
+              />
+            </div>
+            <button
+              type="button"
+              id="editClearImgBtn"
+              onclick="
+                clearImage(
+                  'editImageInput',
+                  'editImgPreview',
+                  'editImgPlaceholder',
+                  'editClearImgBtn',
+                )
+              "
+              class="hidden mt-1 text-xs text-red-400 hover:text-red-600 underline"
+            >
+              Remove new image (keep existing)
+            </button>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Product Name <span class="text-red-500">*</span></label
+            ><input
+              name="product_name"
+              id="editProductName"
+              type="text"
+              required
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Category <span class="text-red-500">*</span></label
+            ><input
+              name="category"
+              id="editCategory"
+              type="text"
+              required
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Sub Category <span class="text-red-500">*</span></label
+            ><input
+              name="sub_category"
+              id="editSubCategory"
+              type="text"
+              required
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Sales ($)</label
+            ><input
+              name="sales"
+              id="editSales"
+              type="number"
+              step="0.01"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Quantity</label
+            ><input
+              name="quantity"
+              id="editQuantity"
+              type="number"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Discount (%)</label
+            ><input
+              name="discount"
+              id="editDiscount"
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p class="text-xs text-gray-400 mt-1">Enter 20 for 20%</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Profit ($)</label
+            ><input
+              name="profit"
+              id="editProfit"
+              type="number"
+              step="0.01"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Order Date</label
+            ><input
+              name="order_date"
+              id="editOrderDate"
+              type="date"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Stock Level</label
+            ><input
+              name="stock_level"
+              id="editStockLevel"
+              type="number"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Reorder Point</label
+            ><input
+              name="reorder_point"
+              id="editReorderPoint"
+              type="number"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Shelf Life (Days)</label
+            ><input
+              name="shelf_life_days"
+              id="editShelfLife"
+              type="number"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div
+            id="editError"
+            class="md:col-span-2 hidden text-sm text-red-500 bg-red-50 rounded-xl px-4 py-2.5"
+          ></div>
+          <div
+            class="md:col-span-2 flex justify-end gap-3 mt-2 pt-4 border-t border-gray-100"
+          >
+            <button
+              type="button"
+              onclick="closeEditModal()"
+              class="border border-gray-200 px-5 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              id="editSubmitBtn"
+              class="btn-primary bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-semibold"
+            >
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- DELETE MODAL -->
+    <div
+      id="deleteModal"
+      class="modal-overlay fixed inset-0 bg-black/40 hidden items-center justify-center z-50"
+    >
+      <div
+        class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 mx-4 text-center"
+      >
+        <div class="text-5xl mb-4">🗑️</div>
+        <h2 class="text-xl font-bold text-gray-900 mb-2">Delete Product?</h2>
+        <p class="text-sm text-gray-500 mb-1">
+          You are about to permanently delete:
+        </p>
+        <p
+          id="deleteProductName"
+          class="text-base font-semibold text-gray-800 mb-5 bg-gray-50 px-4 py-2 rounded-xl"
+        ></p>
+        <p class="text-xs text-red-400 mb-6">
+          This will rebuild ML data and ARIMA forecasts. This action cannot be
+          undone.
+        </p>
+        <div class="flex gap-3 justify-center">
+          <button
+            onclick="closeDeleteModal()"
+            class="border border-gray-200 px-6 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            id="confirmDeleteBtn"
+            class="bg-red-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-red-600 transition-colors"
+          >
+            Yes, Delete
+          </button>
+        </div>
+        <div
+          id="deleteError"
+          class="hidden mt-4 text-sm text-red-500 bg-red-50 rounded-xl px-4 py-2.5"
+        ></div>
+      </div>
+    </div>
+
+    <!-- TOAST -->
+    <div
+      id="toast"
+      class="hidden fixed bottom-6 right-6 z-[100] px-5 py-3 rounded-xl shadow-lg text-sm font-medium text-white transition-all"
+    ></div>
+
     <script>
-function openAddProductModal() {
-  const modal = document.getElementById("addProductModal");
-  modal.classList.remove("hidden");
-  modal.classList.add("flex");
-}
+      function showToast(msg, type = "success") {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.className = `fixed bottom-6 right-6 z-[100] px-5 py-3 rounded-xl shadow-lg text-sm font-medium text-white transition-all ${type === "success" ? "bg-green-600" : "bg-red-500"}`;
+        t.classList.remove("hidden");
+        setTimeout(() => t.classList.add("hidden"), 3500);
+      }
 
-function closeAddProductModal() {
-  const modal = document.getElementById("addProductModal");
-  modal.classList.add("hidden");
-  modal.classList.remove("flex");
-}
+      function previewImage(input, previewId, placeholderId) {
+        const preview = document.getElementById(previewId);
+        const placeholder = document.getElementById(placeholderId);
+        const file = input.files[0];
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) {
+          alert("Image must be under 5 MB.");
+          input.value = "";
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          preview.src = e.target.result;
+          preview.classList.remove("hidden");
+          placeholder.classList.add("hidden");
+          const clearBtn = document.getElementById(
+            input.id.replace("ImageInput", "ClearImgBtn"),
+          );
+          if (clearBtn) clearBtn.classList.remove("hidden");
+        };
+        reader.readAsDataURL(file);
+      }
 
-document.addEventListener("DOMContentLoaded", function () {
-  const form = document.getElementById("addProductForm");
+      function clearImage(inputId, previewId, placeholderId, clearBtnId) {
+        document.getElementById(inputId).value = "";
+        const preview = document.getElementById(previewId);
+        preview.src = "";
+        preview.classList.add("hidden");
+        document.getElementById(placeholderId).classList.remove("hidden");
+        document.getElementById(clearBtnId).classList.add("hidden");
+      }
 
-  form.addEventListener("submit", async function (e) {
-    e.preventDefault();
+      ["addImgDropZone", "editImgDropZone"].forEach((zoneId) => {
+        const zone = document.getElementById(zoneId);
+        if (!zone) return;
+        const inputId = zoneId.replace("ImgDropZone", "ImageInput");
+        zone.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          zone.classList.add("dragover");
+        });
+        zone.addEventListener("dragleave", () =>
+          zone.classList.remove("dragover"),
+        );
+        zone.addEventListener("drop", (e) => {
+          e.preventDefault();
+          zone.classList.remove("dragover");
+          const file = e.dataTransfer.files[0];
+          if (file && file.type.startsWith("image/")) {
+            const input = document.getElementById(inputId);
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+            input.dispatchEvent(new Event("change"));
+          }
+        });
+      });
 
-    const formData = new FormData(form);
-    const payload = Object.fromEntries(formData.entries());
+      function openAddProductModal() {
+        const m = document.getElementById("addProductModal");
+        m.classList.remove("hidden");
+        m.classList.add("flex");
+        document.getElementById("addProductForm").reset();
+        document.getElementById("addError").classList.add("hidden");
+        clearImage(
+          "addImageInput",
+          "addImgPreview",
+          "addImgPlaceholder",
+          "addClearImgBtn",
+        );
+      }
+      function closeAddProductModal() {
+        document.getElementById("addProductModal").classList.add("hidden");
+        document.getElementById("addProductModal").classList.remove("flex");
+      }
 
-    const response = await fetch("/api/products/add", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
+      document
+        .getElementById("addProductForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const btn = document.getElementById("addSubmitBtn");
+          const err = document.getElementById("addError");
+          btn.disabled = true;
+          btn.textContent = "Saving...";
+          err.classList.add("hidden");
+          try {
+            const res = await fetch("/api/products/add", {
+              method: "POST",
+              body: new FormData(e.target),
+            });
+            const data = await res.json();
+            if (res.ok) {
+              closeAddProductModal();
+              showToast("Product added!");
+              setTimeout(() => location.reload(), 1200);
+            } else {
+              err.textContent = data.message || "Something went wrong.";
+              err.classList.remove("hidden");
+            }
+          } catch {
+            err.textContent = "Network error.";
+            err.classList.remove("hidden");
+          }
+          btn.disabled = false;
+          btn.textContent = "Save Product";
+        });
 
-    const result = await response.json();
-    alert(result.message || "Something went wrong");
+      // FIX: openEditModal now takes encodedSubCategory and calls /api/products/by-name/
+      async function openEditModal(encodedSubCategory) {
+        const m = document.getElementById("editProductModal");
+        m.classList.remove("hidden");
+        m.classList.add("flex");
+        document.getElementById("editLoading").classList.remove("hidden");
+        document.getElementById("editProductForm").classList.add("hidden");
+        document.getElementById("editError").classList.add("hidden");
+        clearImage(
+          "editImageInput",
+          "editImgPreview",
+          "editImgPlaceholder",
+          "editClearImgBtn",
+        );
 
-    if (response.ok) {
-      closeAddProductModal();
-      window.location.reload();
-    } else {
-      console.error(result);
-    }
-  });
-});
-</script>
+        try {
+          const res = await fetch(
+            `/api/products/by-name/${encodedSubCategory}`,
+          );
+          if (!res.ok) throw new Error("not found");
+          const p = await res.json();
+
+          document.getElementById("editSubCategoryKey").value =
+            encodedSubCategory;
+          document.getElementById("editProductSubtitle").textContent =
+            `Editing: ${p.sub_category}`;
+          document.getElementById("editProductName").value =
+            p.product_name || p.sub_category || "";
+          document.getElementById("editCategory").value = p.category || "";
+          document.getElementById("editSubCategory").value =
+            p.sub_category || "";
+          document.getElementById("editSales").value = p.sales || 0;
+          document.getElementById("editQuantity").value = p.quantity || 0;
+          document.getElementById("editDiscount").value = parseFloat(
+            p.discount || 0,
+          ).toFixed(2);
+          document.getElementById("editProfit").value = p.profit || 0;
+          document.getElementById("editOrderDate").value = p.order_date || "";
+          document.getElementById("editStockLevel").value = p.stock_level || 0;
+          document.getElementById("editReorderPoint").value =
+            p.reorder_point || 0;
+          document.getElementById("editShelfLife").value =
+            p.shelf_life_days || 365;
+
+          if (p.image_url) {
+            const preview = document.getElementById("editImgPreview");
+            preview.src = p.image_url;
+            preview.classList.remove("hidden");
+            document
+              .getElementById("editImgPlaceholder")
+              .classList.add("hidden");
+            document.getElementById("editImgHint").textContent =
+              "Click to replace the current image";
+          }
+
+          document.getElementById("editLoading").classList.add("hidden");
+          document.getElementById("editProductForm").classList.remove("hidden");
+        } catch {
+          document.getElementById("editLoading").innerHTML =
+            '<p class="text-red-500 text-sm">Failed to load product. Please try again.</p>';
+        }
+      }
+
+      function closeEditModal() {
+        document.getElementById("editProductModal").classList.add("hidden");
+        document.getElementById("editProductModal").classList.remove("flex");
+      }
+
+      document
+        .getElementById("editProductForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const btn = document.getElementById("editSubmitBtn");
+          const err = document.getElementById("editError");
+          btn.disabled = true;
+          btn.textContent = "Saving...";
+          err.classList.add("hidden");
+
+          const formData = new FormData(e.target);
+          const key = formData.get("sub_category_key");
+          formData.delete("sub_category_key");
+
+          try {
+            const res = await fetch(`/api/products/by-name/${key}/update`, {
+              method: "POST",
+              body: formData,
+            });
+            const data = await res.json();
+            if (res.ok) {
+              closeEditModal();
+              showToast("Product updated!");
+              setTimeout(() => location.reload(), 1200);
+            } else {
+              err.textContent = data.message || "Update failed.";
+              err.classList.remove("hidden");
+            }
+          } catch {
+            err.textContent = "Network error.";
+            err.classList.remove("hidden");
+          }
+          btn.disabled = false;
+          btn.textContent = "Save Changes";
+        });
+
+      let _deleteKey = null;
+      function openDeleteModal(encodedSubCategory, displayName) {
+        _deleteKey = encodedSubCategory;
+        document.getElementById("deleteProductName").textContent = displayName;
+        document.getElementById("deleteError").classList.add("hidden");
+        const m = document.getElementById("deleteModal");
+        m.classList.remove("hidden");
+        m.classList.add("flex");
+      }
+      function closeDeleteModal() {
+        _deleteKey = null;
+        document.getElementById("deleteModal").classList.add("hidden");
+        document.getElementById("deleteModal").classList.remove("flex");
+      }
+
+      document
+        .getElementById("confirmDeleteBtn")
+        .addEventListener("click", async () => {
+          if (!_deleteKey) return;
+          const btn = document.getElementById("confirmDeleteBtn");
+          const err = document.getElementById("deleteError");
+          btn.disabled = true;
+          btn.textContent = "Deleting...";
+          err.classList.add("hidden");
+          try {
+            const res = await fetch(
+              `/api/products/by-name/${_deleteKey}/delete`,
+              { method: "POST" },
+            );
+            const data = await res.json();
+            if (res.ok) {
+              closeDeleteModal();
+              showToast("Product deleted.");
+              setTimeout(() => location.reload(), 1200);
+            } else {
+              err.textContent = data.message || "Delete failed.";
+              err.classList.remove("hidden");
+            }
+          } catch {
+            err.textContent = "Network error.";
+            err.classList.remove("hidden");
+          }
+          btn.disabled = false;
+          btn.textContent = "Yes, Delete";
+        });
+
+      function applyFilters() {
+        const search = document
+          .getElementById("searchInput")
+          .value.toLowerCase()
+          .trim();
+        const category = document
+          .getElementById("categoryFilter")
+          .value.toLowerCase();
+        const status = document.getElementById("statusFilter").value;
+        const sort = document.getElementById("sortFilter").value;
+        const cards = Array.from(document.querySelectorAll(".product-card"));
+        let visible = [];
+
+        cards.forEach((card) => {
+          const ok =
+            (!search ||
+              (card.dataset.name || "").includes(search) ||
+              (card.dataset.region || "").includes(search)) &&
+            (!category || (card.dataset.category || "").includes(category)) &&
+            (!status || card.dataset.status === status);
+          card.classList.toggle("hidden", !ok);
+          if (ok) visible.push(card);
+        });
+
+        if (sort && visible.length > 1) {
+          const grid = document.getElementById("productGrid");
+          visible.sort((a, b) => {
+            if (sort === "sales_desc")
+              return parseFloat(b.dataset.sales) - parseFloat(a.dataset.sales);
+            if (sort === "sales_asc")
+              return parseFloat(a.dataset.sales) - parseFloat(b.dataset.sales);
+            if (sort === "stock_asc")
+              return parseFloat(a.dataset.stock) - parseFloat(b.dataset.stock);
+            if (sort === "name_asc")
+              return a.dataset.name.localeCompare(b.dataset.name);
+            return 0;
+          });
+          visible.forEach((card) => grid.appendChild(card));
+        }
+
+        document.getElementById("resultCount").textContent = visible.length
+          ? `${visible.length} product${visible.length !== 1 ? "s" : ""} found`
+          : "";
+        document
+          .getElementById("noResults")
+          .classList.toggle("hidden", visible.length > 0);
+      }
+
+      function resetFilters() {
+        ["searchInput", "categoryFilter", "statusFilter", "sortFilter"].forEach(
+          (id) => (document.getElementById(id).value = ""),
+        );
+        applyFilters();
+      }
+
+      ["addProductModal", "editProductModal", "deleteModal"].forEach((id) => {
+        document.getElementById(id).addEventListener("click", function (e) {
+          if (e.target === this) {
+            this.classList.add("hidden");
+            this.classList.remove("flex");
+          }
+        });
+      });
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const total = document.querySelectorAll(".product-card").length;
+        document.getElementById("resultCount").textContent = total
+          ? `${total} products found`
+          : "";
+      });
+    </script>
   </body>
 </html>
