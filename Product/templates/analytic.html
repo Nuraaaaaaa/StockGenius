@@ -21,7 +21,6 @@
         background: #f1f5f9;
       }
 
-      /* ── All text forced dark for PDF capture visibility ── */
       .kpi-label {
         color: #374151;
         font-size: 0.7rem;
@@ -72,7 +71,6 @@
         transform: translateY(-2px);
       }
 
-      /* Table text — all dark */
       .tbl-th {
         color: #1e293b;
         font-size: 0.72rem;
@@ -94,7 +92,6 @@
         padding: 10px 16px;
       }
 
-      /* Badges */
       .badge-healthy {
         background: #dcfce7;
         color: #14532d;
@@ -144,7 +141,6 @@
         font-weight: 800;
       }
 
-      /* Filter / date buttons */
       .date-preset,
       .filter-btn {
         padding: 8px 14px;
@@ -180,16 +176,7 @@
         transition: width 0.4s ease;
       }
 
-      @keyframes fadeUp {
-        from {
-          opacity: 0;
-          transform: translateY(10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
+     
       .fu {
         animation: fadeUp 0.35s ease both;
       }
@@ -206,7 +193,6 @@
         animation-delay: 0.16s;
       }
 
-      /* Search input — dark text */
       #tableSearch {
         color: #0f172a;
         font-weight: 600;
@@ -217,6 +203,29 @@
         color: #64748b;
         font-weight: 500;
       }
+
+      /* ── PDF-specific styles: force solid colours, no transparency ── */
+      #reportContent.pdf-capture * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      #reportContent.pdf-capture .section-card {
+        background: #ffffff !important;
+        border: 1.5px solid #cbd5e1 !important;
+        box-shadow: none !important;
+      }
+      #reportContent.pdf-capture .kpi-label,
+      #reportContent.pdf-capture .kpi-meta,
+      #reportContent.pdf-capture .chart-sub {
+        color: #374151 !important;
+      }
+      #reportContent.pdf-capture .kpi-value,
+      #reportContent.pdf-capture .chart-title,
+      #reportContent.pdf-capture .tbl-th,
+      #reportContent.pdf-capture .tbl-td,
+      #reportContent.pdf-capture .tbl-td-strong {
+        color: #0f172a !important;
+      }
     </style>
   </head>
 
@@ -225,7 +234,7 @@
       {% include "sidebar.html" %}
 
       <main class="flex-1 min-w-0 overflow-y-auto">
-        <!-- ── HEADER ─────────────────────────────────────────── -->
+        <!-- ── HEADER ── -->
         <header
           class="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm"
         >
@@ -272,7 +281,6 @@
             </div>
           </div>
 
-          <!-- Progress bar -->
           <div id="pdfProgressBar" class="hidden h-1 bg-slate-100 w-full">
             <div
               id="pdfProgress"
@@ -300,7 +308,7 @@
           </button>
         </div>
 
-        <!-- ── REPORT CONTENT ──────────────────────────────────── -->
+        <!-- ── REPORT CONTENT ── -->
         <div id="reportContent" class="px-6 py-6 bg-slate-50">
           <!-- KPI CARDS -->
           <div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
@@ -471,9 +479,7 @@
       </main>
     </div>
 
-    <!-- ════════════════════════════════════════════════
-         DATE RANGE MODAL
-    ════════════════════════════════════════════════ -->
+    <!-- DATE RANGE MODAL -->
     <div
       id="dateModal"
       class="modal-bg fixed inset-0 bg-black/40 hidden items-center justify-center z-50"
@@ -562,9 +568,7 @@
       </div>
     </div>
 
-    <!-- ════════════════════════════════════════════════
-         FILTERS MODAL
-    ════════════════════════════════════════════════ -->
+    <!-- FILTERS MODAL -->
     <div
       id="filtersModal"
       class="modal-bg fixed inset-0 bg-black/40 hidden items-center justify-center z-50"
@@ -649,7 +653,7 @@
       </div>
     </div>
 
-    <!-- ── TOAST ──────────────────────────────────────────────── -->
+    <!-- TOAST -->
     <div
       id="toast"
       class="hidden fixed bottom-6 right-6 z-[100] bg-slate-900 text-white text-sm px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 font-semibold"
@@ -659,14 +663,14 @@
     </div>
 
     <script>
-      // ── Chart.js global defaults — dark text, visible everywhere including PDF ──
+      // ── Chart.js global defaults ──
       Chart.defaults.color = "#1e293b";
       Chart.defaults.font.family = "'DM Sans', sans-serif";
       Chart.defaults.font.size = 11;
       Chart.defaults.font.weight = "600";
       Chart.defaults.plugins.legend.labels.color = "#1e293b";
 
-      // ── State ──────────────────────────────────────────────────────
+      // ── State ──
       let revenueChart, categoryChart, marginChart, topChart;
       let allData = {};
       let tableRows = [];
@@ -676,7 +680,7 @@
 
       document.addEventListener("DOMContentLoaded", loadAllData);
 
-      // ── Load all API data ──────────────────────────────────────────
+      // ── Load all API data ──
       async function loadAllData() {
         try {
           const [s, t, tp, m] = await Promise.all([
@@ -698,7 +702,7 @@
         }
       }
 
-      // ── KPIs ───────────────────────────────────────────────────────
+      // ── KPIs ──
       function renderKPIs() {
         const s = allData.stats;
         const fmt = (n, d = 2) =>
@@ -727,7 +731,7 @@
         }
       }
 
-      // ── Revenue Chart ──────────────────────────────────────────────
+      // ── Revenue Chart ──
       function renderRevenueChart() {
         if (revenueChart) revenueChart.destroy();
         const d = allData.trend;
@@ -742,12 +746,12 @@
           (fct.length ? ` + ${fct.length} month ARIMA forecast` : "");
         document.getElementById("revenueLegend").innerHTML =
           `<span style="display:flex;align-items:center;gap:5px;color:#1d4ed8">
-                 <span style="width:14px;height:3px;background:#3b82f6;border-radius:2px;display:inline-block"></span>Actual
-               </span>` +
+             <span style="width:14px;height:3px;background:#3b82f6;border-radius:2px;display:inline-block"></span>Actual
+           </span>` +
           (fct.length
             ? `<span style="display:flex;align-items:center;gap:5px;color:#c2410c">
-                     <span style="width:14px;height:3px;background:#f97316;border-radius:2px;display:inline-block"></span>Forecast
-                   </span>`
+             <span style="width:14px;height:3px;background:#f97316;border-radius:2px;display:inline-block"></span>Forecast
+           </span>`
             : "");
 
         revenueChart = new Chart(
@@ -828,7 +832,7 @@
         );
       }
 
-      // ── Category Doughnut ──────────────────────────────────────────
+      // ── Category Doughnut ──
       function renderCategoryChart() {
         if (categoryChart) categoryChart.destroy();
         const m = allData.margins;
@@ -894,7 +898,7 @@
         );
       }
 
-      // ── Margin Bar Chart ───────────────────────────────────────────
+      // ── Margin Bar Chart ──
       function renderMarginChart() {
         if (marginChart) marginChart.destroy();
         const m = allData.margins;
@@ -949,7 +953,7 @@
         );
       }
 
-      // ── Top Products Horizontal Bar ────────────────────────────────
+      // ── Top Products Horizontal Bar ──
       function renderTopChart() {
         if (topChart) topChart.destroy();
         const tp = allData.topProducts;
@@ -994,7 +998,7 @@
         );
       }
 
-      // ── Table ──────────────────────────────────────────────────────
+      // ── Table ──
       function buildTable() {
         const m = allData.margins,
           tp = allData.topProducts;
@@ -1040,13 +1044,13 @@
                   ? '<span class="badge-thin">Thin</span>'
                   : '<span class="badge-healthy">Healthy</span>';
             return `<tr style="border-bottom:1px solid #f1f5f9;">
-                <td class="tbl-td-strong">${r.name}</td>
-                <td class="tbl-td" style="text-align:right">$${fmt(r.sales)}</td>
-                <td style="padding:10px 16px;text-align:right;font-weight:800;color:${profitColor}">$${fmt(r.profit)}</td>
-                <td style="padding:10px 16px;text-align:right">${mbadge}</td>
-                <td class="tbl-td" style="text-align:right">${fmt(r.units)}</td>
-                <td style="padding:10px 16px;text-align:right">${sbadge}</td>
-              </tr>`;
+            <td class="tbl-td-strong">${r.name}</td>
+            <td class="tbl-td" style="text-align:right">$${fmt(r.sales)}</td>
+            <td style="padding:10px 16px;text-align:right;font-weight:800;color:${profitColor}">$${fmt(r.profit)}</td>
+            <td style="padding:10px 16px;text-align:right">${mbadge}</td>
+            <td class="tbl-td" style="text-align:right">${fmt(r.units)}</td>
+            <td style="padding:10px 16px;text-align:right">${sbadge}</td>
+          </tr>`;
           })
           .join("");
       }
@@ -1076,7 +1080,7 @@
         });
       }
 
-      // ── Filter helpers ─────────────────────────────────────────────
+      // ── Filter helpers ──
       function toggleFilter(btn, group, val) {
         document
           .querySelectorAll(`[data-group="${group}"]`)
@@ -1147,7 +1151,7 @@
         }
       }
 
-      // ── Date Range ─────────────────────────────────────────────────
+      // ── Date Range ──
       function applyPreset(preset, btn) {
         selectedPreset = preset;
         document
@@ -1185,7 +1189,7 @@
         showToast("Date range applied", "info");
       }
 
-      // ── Modal helpers ──────────────────────────────────────────────
+      // ── Modal helpers ──
       function openDateModal() {
         openModal("dateModal");
       }
@@ -1208,7 +1212,7 @@
         });
       });
 
-      // ── Toast ──────────────────────────────────────────────────────
+      // ── Toast ──
       function showToast(msg, type = "info") {
         const t = document.getElementById("toast");
         document.getElementById("toastIcon").textContent =
@@ -1218,7 +1222,9 @@
         setTimeout(() => t.classList.add("hidden"), 3000);
       }
 
-      // ── PDF EXPORT ─────────────────────────────────────────────────
+      // ════════════════════════════════════════
+      // PDF EXPORT — high-quality, crisp text
+      // ════════════════════════════════════════
       async function exportToPDF() {
         const btn = document.getElementById("exportBtn");
         const btnText = document.getElementById("exportBtnText");
@@ -1234,31 +1240,64 @@
 
         try {
           const { jsPDF } = window.jspdf;
-          prog.style.width = "12%";
-          document.getElementById("pdfFooter").classList.remove("hidden");
-          await new Promise((r) => setTimeout(r, 120));
+          prog.style.width = "10%";
 
-          prog.style.width = "35%";
+          // Show PDF footer, hide interactive chrome
+          document.getElementById("pdfFooter").classList.remove("hidden");
+          const el = document.getElementById("reportContent");
+
+          // Add pdf-capture class for style overrides
+          el.classList.add("pdf-capture");
+
+          // Let styles settle
+          await new Promise((r) => setTimeout(r, 300));
+          prog.style.width = "25%";
           document.getElementById("toastMsg").textContent = "Capturing charts…";
 
-          const el = document.getElementById("reportContent");
-         const canvas = await html2canvas(el, {
-  scale: 3,
-  useCORS: true,
-  backgroundColor: "#ffffff",
-  logging: false,
-  windowWidth: el.scrollWidth,
-  windowHeight: el.scrollHeight,
-});
+          // ── High-quality canvas capture ──
+          // Use devicePixelRatio-aware scale for sharper text
+          const DPR = window.devicePixelRatio || 1;
+          const SCALE = Math.max(3, DPR * 2); // at least 3×, usually 4× on HiDPI
 
-// Force better clarity
-const imgData = canvas.toDataURL("image/png");
+          const canvas = await html2canvas(el, {
+            scale: SCALE,
+            useCORS: true,
+            backgroundColor: "#f1f5f9", // matches body bg so edges look correct
+            logging: false,
+            allowTaint: false,
+            foreignObjectRendering: false,
+            windowWidth: el.scrollWidth,
+            windowHeight: el.scrollHeight,
+            imageTimeout: 15000,
+            onclone: (clonedDoc) => {
+              // Force all text to be fully opaque and dark in the clone
+              const style = clonedDoc.createElement("style");
+              style.textContent = `
+                * { -webkit-font-smoothing: antialiased !important; }
+                .kpi-label { color: #374151 !important; }
+                .kpi-value { color: #0f172a !important; }
+                .kpi-meta  { color: #374151 !important; }
+                .chart-title { color: #0f172a !important; }
+                .chart-sub   { color: #374151 !important; }
+                .tbl-th, .tbl-td, .tbl-td-strong { color: #0f172a !important; }
+                .section-card {
+                  background: #ffffff !important;
+                  border: 1.5px solid #cbd5e1 !important;
+                  box-shadow: none !important;
+                }
+                body { background: #f1f5f9 !important; }
+              `;
+              clonedDoc.head.appendChild(style);
+            },
+          });
 
-
+          // Remove capture class
+          el.classList.remove("pdf-capture");
           document.getElementById("pdfFooter").classList.add("hidden");
-          prog.style.width = "62%";
+          prog.style.width = "60%";
           document.getElementById("toastMsg").textContent = "Building PDF…";
 
+          // ── Build PDF ──
           const pdf = new jsPDF({
             orientation: "portrait",
             unit: "mm",
@@ -1266,99 +1305,122 @@ const imgData = canvas.toDataURL("image/png");
           });
           const pageW = pdf.internal.pageSize.getWidth();
           const pageH = pdf.internal.pageSize.getHeight();
-          const HEADER = 20,
-            FOOTER = 8,
-            usableH = pageH - HEADER - FOOTER;
+          const HEADER = 22;
+          const FOOTER = 10;
+          const usableH = pageH - HEADER - FOOTER;
 
-          // Dark header
-          pdf.setFillColor(15, 23, 42);
-          pdf.rect(0, 0, pageW, HEADER, "F");
-          pdf.setFontSize(13);
-          pdf.setFont("helvetica", "bold");
-          pdf.setTextColor(255, 255, 255);
-          pdf.text("StockGenius  •  Analytics Report", 10, 13);
-          pdf.setFontSize(7.5);
-          pdf.setFont("helvetica", "normal");
-          const now = new Date().toLocaleString("en-US", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-          pdf.text("Generated: " + now, pageW - 8, 13, { align: "right" });
-          const filterTxt = buildFilterText();
-          if (filterTxt) {
-            pdf.setTextColor(0, 0, 0);
-            pdf.setFontSize(6.5);
-            pdf.text(filterTxt, 10, 18.5);
+          // Compute proportional height
+          const imgH_mm = (canvas.height / canvas.width) * pageW;
+
+          // ── Helper: add header band ──
+          function addHeader(pageNum, totalPages) {
+            // Dark header bar
+            pdf.setFillColor(15, 23, 42);
+            pdf.rect(0, 0, pageW, HEADER, "F");
+
+            // Logo / title
+            pdf.setFontSize(12);
+            pdf.setFont("helvetica", "bold");
+            pdf.setTextColor(255, 255, 255);
+            pdf.text("StockGenius  •  Analytics Report", 10, 14);
+
+            // Generated timestamp (right)
+            const now = new Date().toLocaleString("en-US", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+            pdf.setFontSize(7);
+            pdf.setFont("helvetica", "normal");
+            pdf.setTextColor(203, 213, 225);
+            pdf.text("Generated: " + now, pageW - 8, 10, { align: "right" });
+
+            // Filter text (below title)
+            const filterTxt = buildFilterText();
+            if (filterTxt) {
+              pdf.setFontSize(6.5);
+              pdf.setTextColor(148, 163, 184);
+              pdf.text(filterTxt, 10, 20);
+            }
+
+            // Continuation label on pages > 1
+            if (pageNum > 1) {
+              pdf.setFontSize(7);
+              pdf.setFont("helvetica", "italic");
+              pdf.setTextColor(148, 163, 184);
+              pdf.text(
+                `(continued — page ${pageNum} of ${totalPages})`,
+                pageW - 8,
+                20,
+                { align: "right" },
+              );
+            }
           }
 
-          // Tile content across pages
-          const imgH_mm = (canvas.height / canvas.width) * pageW;
-          let sliceTop = 0,
-            pageNum = 0;
+          // ── Slice canvas into pages ──
+          let sliceTop = 0;
+          let pageNum = 0;
+          const totalPages = Math.ceil(imgH_mm / usableH);
 
           while (sliceTop < imgH_mm) {
-            if (pageNum > 0) {
-              pdf.addPage();
-              pdf.setFillColor(15, 23, 42);
-              pdf.rect(0, 0, pageW, HEADER, "F");
-              pdf.setFontSize(10);
-              pdf.setFont("helvetica", "bold");
-              pdf.setTextColor(255, 255, 255);
-              pdf.text("StockGenius  •  Analytics Report (cont.)", 10, 13);
-            }
+            if (pageNum > 0) pdf.addPage();
             pageNum++;
-            const sliceH_mm = Math.min(usableH, imgH_mm - sliceTop);
-            const sliceH_px = Math.round((sliceH_mm / imgH_mm) * canvas.height);
-            const sliceTop_px = Math.round(
-              (sliceTop / imgH_mm) * canvas.height,
-            );
 
+            addHeader(pageNum, totalPages);
+
+            const sliceH_mm = Math.min(usableH, imgH_mm - sliceTop);
+            const pxPerMm = canvas.height / imgH_mm;
+            const sliceTop_px = Math.round(sliceTop * pxPerMm);
+            const sliceH_px = Math.round(sliceH_mm * pxPerMm);
+
+            // Draw just this slice
             const chunk = document.createElement("canvas");
             chunk.width = canvas.width;
             chunk.height = sliceH_px;
-            chunk
-              .getContext("2d")
-              .drawImage(
-                canvas,
-                0,
-                sliceTop_px,
-                canvas.width,
-                sliceH_px,
-                0,
-                0,
-                canvas.width,
-                sliceH_px,
-              );
+            const ctx = chunk.getContext("2d");
+            ctx.fillStyle = "#f1f5f9";
+            ctx.fillRect(0, 0, chunk.width, chunk.height);
+            ctx.drawImage(
+              canvas,
+              0,
+              sliceTop_px,
+              canvas.width,
+              sliceH_px,
+              0,
+              0,
+              canvas.width,
+              sliceH_px,
+            );
+
+            // Use JPEG at high quality for smaller file size but still crisp
             pdf.addImage(
-              chunk.toDataURL("image/png"),
-              "PNG",
+              chunk.toDataURL("image/jpeg", 1.0),
+              "JPEG",
               0,
               HEADER,
               pageW,
               sliceH_mm,
+              undefined,
+              "FAST",
             );
-            sliceTop += sliceH_mm;
-          }
 
-          // Page numbers
-          const total = pdf.internal.getNumberOfPages();
-          for (let p = 1; p <= total; p++) {
-            pdf.setPage(p);
+            // ── Footer ──
             pdf.setFontSize(7);
             pdf.setFont("helvetica", "normal");
             pdf.setTextColor(148, 163, 184);
             pdf.text(
-              `Page ${p} of ${total}  •  StockGenius Analytics  •  Confidential`,
+              `Page ${pageNum} of ${totalPages}  •  StockGenius Analytics  •  Confidential`,
               pageW / 2,
-              pageH - 3,
+              pageH - 4,
               { align: "center" },
             );
+
+            sliceTop += sliceH_mm;
           }
 
-          prog.style.width = "92%";
+          prog.style.width = "90%";
           document.getElementById("toastMsg").textContent = "Saving file…";
           await new Promise((r) => setTimeout(r, 150));
 
@@ -1370,6 +1432,8 @@ const imgData = canvas.toDataURL("image/png");
           document.getElementById("toastMsg").textContent = `Saved: ${fname}`;
         } catch (err) {
           console.error("PDF error:", err);
+          el.classList.remove("pdf-capture");
+          document.getElementById("pdfFooter").classList.add("hidden");
           document.getElementById("toastIcon").textContent = "❌";
           document.getElementById("toastMsg").textContent =
             "Export failed — check console.";

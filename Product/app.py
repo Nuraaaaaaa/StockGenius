@@ -1224,25 +1224,34 @@ def recent_alerts():
     finally:
         db.close_connection(conn)
 
-
 @app.route("/api/dashboard/margin_by_category")
 @login_required
 def margin_by_category():
     conn = db.open_connection()
     try:
         rows = db.run_query(conn, """
-            SELECT sub_category,
-                   ROUND(SUM(profit)/SUM(sales)*100,2) AS margin_pct,
-                   ROUND(SUM(profit),2) AS total_profit, ROUND(SUM(sales),2) AS total_sales
-            FROM ml_inventory GROUP BY sub_category ORDER BY margin_pct ASC
+            SELECT
+                sub_category,
+                -- NULLIF prevents division-by-zero; COALESCE turns NULL → 0.0
+                COALESCE(
+                    ROUND(SUM(profit) / NULLIF(SUM(sales), 0) * 100, 2),
+                    0.0
+                ) AS margin_pct,
+                ROUND(SUM(profit), 2) AS total_profit,
+                ROUND(SUM(sales),  2) AS total_sales
+            FROM ml_inventory
+            GROUP BY sub_category
+            ORDER BY margin_pct ASC
         """)
         return jsonify({
-            "labels":  [r["sub_category"]       for r in rows],
-            "margins": [float(r["margin_pct"])   for r in rows],
-            "profits": [float(r["total_profit"]) for r in rows],
+            "labels":  [r["sub_category"]              for r in rows],
+            # Safely cast — value is already guaranteed non-NULL by COALESCE
+            "margins": [float(r["margin_pct"]  or 0)   for r in rows],
+            "profits": [float(r["total_profit"] or 0)  for r in rows],
         })
     finally:
         db.close_connection(conn)
+
 
 
 @app.route("/api/chat", methods=["POST"])
