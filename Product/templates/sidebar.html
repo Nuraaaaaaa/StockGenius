@@ -63,12 +63,24 @@
             Analytics
           </a>
 
+          <!-- ── Alerts link with live badge ─────────────────── -->
           <a
             href="{{ url_for('alerts') }}"
             class="flex items-center gap-3 p-3 rounded-lg transition {% if active_page == 'alerts' %}bg-blue-600 text-white shadow-md{% else %}text-gray-600 hover:bg-gray-200{% endif %}"
           >
             <span>🔔</span>
             Alerts
+            <!--
+              Badge is hidden by default.
+              The JS poller below shows it and updates the number
+              whenever /api/alerts/count returns a non-zero value.
+            -->
+            <span
+              id="sg-rt-badge"
+              class="hidden ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full
+                {% if active_page == 'alerts' %}bg-white text-red-500
+                {% else %}bg-red-500 text-white{% endif %}"
+            ></span>
           </a>
         </div>
 
@@ -111,5 +123,297 @@
         </a>
       </div>
     </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         TOAST NOTIFICATION STACK
+         Appears bottom-right on every page when a new real-time
+         alert is detected (new product with low stock / expiry).
+    ═══════════════════════════════════════════════════════════ -->
+    <style>
+      #sg-toast-stack {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column-reverse;
+        gap: .5rem;
+        pointer-events: none;
+      }
+      .sg-toast {
+        pointer-events: auto;
+        display: flex;
+        align-items: flex-start;
+        gap: .75rem;
+        padding: .875rem 1rem;
+        border-radius: 14px;
+        box-shadow: 0 8px 30px rgba(0,0,0,.14);
+        min-width: 300px;
+        max-width: 380px;
+        font-size: .82rem;
+        line-height: 1.4;
+        animation: sgSlideIn .35s cubic-bezier(.22,.61,.36,1) both;
+      }
+      .sg-toast.sg-critical { background:#fff1f2; border-left:4px solid #ef4444; color:#7f1d1d; }
+      .sg-toast.sg-warning  { background:#fffbeb; border-left:4px solid #f59e0b; color:#78350f; }
+      .sg-toast .sg-icon    { font-size:1.25rem; flex-shrink:0; margin-top:.1rem; }
+      .sg-toast .sg-body    { flex:1; }
+      .sg-toast .sg-title   { font-weight:700; margin-bottom:.15rem; }
+      .sg-toast .sg-msg     { opacity:.85; }
+      .sg-toast .sg-close   {
+        background:none; border:none; cursor:pointer;
+        font-size:1rem; opacity:.5; flex-shrink:0;
+        padding:0; line-height:1; color:inherit;
+      }
+      .sg-toast .sg-close:hover { opacity:1; }
+      @keyframes sgSlideIn {
+        from { opacity:0; transform:translateY(12px) scale(.97); }
+        to   { opacity:1; transform:translateY(0) scale(1); }
+      }
+      @keyframes sgFadeOut {
+        to { opacity:0; transform:translateY(8px); max-height:0; margin:0; padding:0; }
+      }
+      .sg-toast.sg-removing {
+        animation: sgFadeOut .3s ease forwards;
+        pointer-events: none;
+        overflow: hidden;
+      }
+    </style>
+
+    <div id="sg-toast-stack"></div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         REAL-TIME ALERT POLLER
+         • On load          → silent fetch, populates alerts page section
+         • Every 30 s       → lightweight /api/alerts/count poll → updates badge
+         • Count changes    → full /api/alerts/live fetch → shows toasts
+         • Every 2 min      → full refresh regardless
+    ═══════════════════════════════════════════════════════════ -->
+    <script>
+    (function () {
+      "use strict";
+
+      const STORAGE_KEY = "sg_seen_alert_ids";
+      const POLL_MS     = 30_000;    // count poll interval
+      const FULL_MS     = 120_000;   // full refresh interval
+
+      /* ── sessionStorage: track already-toasted IDs ──────── */
+      function getSeenIds() {
+        try { return new Set(JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "[]")); }
+        catch { return new Set(); }
+      }
+      function saveSeenIds(set) {
+        try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify([...set].slice(-200))); }
+        catch {}
+      }
+
+      /* ── Show one toast ─────────────────────────────────── */
+      function showToast(alert) {
+        const stack = document.getElementById("sg-toast-stack");
+        if (!stack) return;
+
+        const cls     = alert.type === "critical" ? "sg-critical" : "sg-warning";
+        const icon    = alert.icon || (alert.type === "critical" ? "🔴" : "⚠️");
+        const snippet = (alert.subtitle || alert.message || "").slice(0, 80);
+
+        const el = document.createElement("div");
+        el.className   = `sg-toast ${cls}`;
+        el.dataset.aid = alert.id;
+        el.innerHTML   = `
+          <span class="sg-icon">${icon}</span>
+          <div class="sg-body">
+            <div class="sg-title">${alert.title}</div>
+            <div class="sg-msg">${snippet}…</div>
+          </div>
+          <button class="sg-close" title="Dismiss">✕</button>`;
+
+        el.querySelector(".sg-close").addEventListener("click", () => removeToast(el));
+        stack.appendChild(el);
+        setTimeout(() => removeToast(el), 8000); // auto-dismiss after 8 s
+      }
+
+      function removeToast(el) {
+        if (!el || el.classList.contains("sg-removing")) return;
+        el.classList.add("sg-removing");
+        setTimeout(() => el.remove(), 350);
+      }
+
+      /* ── Update sidebar badge ────────────────────────────── */
+      function updateBadge(count) {
+        const badge = document.getElementById("sg-rt-badge");
+        if (!badge) return;
+        if (count > 0) {
+          badge.textContent = count > 99 ? "99+" : count;
+          badge.classList.remove("hidden");
+        } else {
+          badge.classList.add("hidden");
+        }
+        // also sync any bell-count spans on the alerts page itself
+        document.querySelectorAll(".sg-bell-count").forEach(b => {
+          b.textContent   = count > 99 ? "99+" : count;
+          b.style.display = count > 0 ? "flex" : "none";
+        });
+      }
+
+      /* ── Full fetch → toasts + inject cards on alerts page ─ */
+      async function fetchLiveAlerts(silent) {
+        try {
+          const res = await fetch("/api/alerts/live", { credentials: "same-origin" });
+          if (!res.ok) return;
+          const { alerts, counts } = await res.json();
+
+          // fire toasts only for IDs we haven't seen this session
+          const seen  = getSeenIds();
+          const fresh = alerts.filter(a => !seen.has(a.id));
+          if (!silent) fresh.slice(0, 3).forEach(a => showToast(a));
+          alerts.forEach(a => seen.add(a.id));
+          saveSeenIds(seen);
+
+          updateBadge(counts.total);
+          injectRealtimeSection(alerts); // no-op when not on alerts page
+        } catch { /* fail silently */ }
+      }
+
+      /* ── Lightweight count poll ──────────────────────────── */
+      let _lastRt = -1;
+      async function pollCount() {
+        try {
+          const res = await fetch("/api/alerts/count", { credentials: "same-origin" });
+          if (!res.ok) return;
+          const { total, realtime } = await res.json();
+          updateBadge(total);
+          // if realtime count has grown since last poll, fetch full list
+          if (_lastRt !== -1 && realtime !== _lastRt) {
+            await fetchLiveAlerts(false);
+          }
+          _lastRt = realtime;
+        } catch {}
+      }
+
+      /* ── Inject cards into #sg-realtime-alerts (alerts page) */
+      function injectRealtimeSection(alerts) {
+        const container = document.getElementById("sg-realtime-alerts");
+        if (!container) return;
+
+        // sync counters
+        const pill = document.getElementById("sg-rt-count-pill");
+        if (pill) pill.textContent = alerts.length;
+        const ribbon = document.getElementById("rtCount");
+        if (ribbon) ribbon.textContent = alerts.length;
+
+        if (alerts.length === 0) {
+          container.innerHTML = `
+            <div class="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-gray-400 text-sm">
+              <div class="text-3xl mb-2">✅</div>
+              <p>No real-time alerts from manually added products.</p>
+            </div>`;
+          return;
+        }
+
+        container.innerHTML = alerts.map(a => {
+          const isC    = a.type === "critical";
+          const barCls = isC ? "bg-red-500"   : "bg-amber-400";
+          const bgCls  = isC ? "bg-red-50/40" : "bg-amber-50/40";
+          const iconBg = isC ? "bg-red-100"   : "bg-amber-100";
+          const titleC = isC ? "text-red-700" : "text-amber-700";
+          const bdgCls = isC ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-700";
+          const pct    = a.reorder_point > 0
+                       ? Math.min(100, Math.round(a.stock_level / a.reorder_point * 100))
+                       : 100;
+          const barCol = pct <= 50 ? "bg-red-500" : pct <= 100 ? "bg-amber-400" : "bg-green-500";
+
+          return `
+          <div class="alert-card bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+               data-type="${a.type}"
+               data-search="${(a.title+' '+a.subtitle+' '+a.message).toLowerCase()}">
+            <div class="flex">
+              <div class="w-1.5 flex-shrink-0 ${barCls}"
+                   style="box-shadow:0 0 8px ${isC?'#ef444480':'#f59e0b60'}"></div>
+              <div class="flex-1 p-4 ${bgCls}">
+                <div class="flex items-start justify-between gap-4">
+                  <div class="flex items-start gap-3 flex-1 min-w-0">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${iconBg}">
+                      ${a.icon}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        ${isC ? '<span class="pulse-dot bg-red-500"></span>' : ''}
+                        <h3 class="font-bold text-sm ${titleC}">${a.title}</h3>
+                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${bdgCls}">
+                          ${a.type.toUpperCase()}
+                        </span>
+                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                          ⚡ REAL-TIME
+                        </span>
+                      </div>
+
+                      <p class="text-xs text-gray-500 mt-0.5 font-medium">${a.subtitle}</p>
+                      <p class="text-sm text-gray-700 mt-2 leading-relaxed">${a.message}</p>
+
+                      <div class="flex flex-wrap gap-2 mt-3">
+                        <span class="stat-pill bg-gray-100 text-gray-600">📦 Stock: <strong>${a.stock_level}</strong> units</span>
+                        <span class="stat-pill ${a.stock_level <= a.reorder_point ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}">
+                          🔁 Reorder @ ${a.reorder_point}
+                        </span>
+                        ${a.days_to_expiry < 9999
+                          ? `<span class="stat-pill ${a.days_to_expiry<=7?'bg-red-100 text-red-600':a.days_to_expiry<=30?'bg-amber-100 text-amber-700':'bg-green-100 text-green-600'}">
+                               📅 Expires in ${a.days_to_expiry} days
+                             </span>`
+                          : ''}
+                        <span class="stat-pill bg-emerald-100 text-emerald-700">
+                          💰 Sales: $${Math.round(a.sales)}
+                        </span>
+                      </div>
+
+                      <div class="mt-3">
+                        <div class="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>Stock vs Reorder Point</span><span>${pct}%</span>
+                        </div>
+                        <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                          <div class="h-1.5 rounded-full ${barCol}" style="width:${pct}%;transition:width .6s"></div>
+                        </div>
+                      </div>
+
+                      <div class="mt-4 flex flex-wrap gap-2">
+                        <button type="button"
+                          class="px-3 py-1.5 text-xs rounded-xl bg-blue-600 text-white font-semibold hover:opacity-90">
+                          ${a.action}
+                        </button>
+                        <button type="button"
+                          class="ack-btn px-3 py-1.5 text-xs rounded-xl bg-white border border-gray-200 text-gray-600 font-medium">
+                          ✓ Acknowledge
+                        </button>
+                        <button type="button"
+                          class="px-3 py-1.5 text-xs rounded-xl text-gray-400 font-medium"
+                          onclick="this.closest('.alert-card').style.display='none'">
+                          ✕ Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="text-right flex-shrink-0">
+                    <span class="text-xs text-gray-400">Just now</span>
+                    ${a.region ? `<p class="text-xs text-gray-300 mt-0.5">${a.region}</p>` : ''}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>`;
+        }).join("");
+      }
+
+      /* ── Bootstrap on page load ──────────────────────────── */
+      document.addEventListener("DOMContentLoaded", () => {
+        fetchLiveAlerts(true);                              // silent initial load
+        setInterval(pollCount, POLL_MS);                   // count badge every 30 s
+        setInterval(() => fetchLiveAlerts(false), FULL_MS);// full refresh every 2 min
+      });
+
+      // expose so the Refresh button on the alerts page can call it
+      window.sgFetchLiveAlerts = fetchLiveAlerts;
+
+    })();
+    </script>
+
   </body>
 </html>

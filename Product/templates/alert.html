@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Alerts & Notifications – StockGenius</title>
+    <title>Alerts &amp; Notifications – StockGenius</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
     <style>
@@ -14,13 +14,10 @@
         transition: box-shadow 0.2s ease, transform 0.2s ease;
       }
       .alert-card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.08); transform: translateY(-1px); }
-
       @keyframes slideIn {
         from { opacity: 0; transform: translateY(10px); }
         to   { opacity: 1; transform: translateY(0); }
       }
-
-      /* stagger each card's animation */
       .alert-card:nth-child(1) { animation-delay: .04s }
       .alert-card:nth-child(2) { animation-delay: .08s }
       .alert-card:nth-child(3) { animation-delay: .12s }
@@ -38,9 +35,7 @@
         padding: 3px 8px; border-radius: 6px;
         font-size: 0.72rem; font-weight: 600; letter-spacing: 0.01em;
       }
-
       .progress-bar { transition: width 0.6s cubic-bezier(.4,0,.2,1); }
-
       .pulse-dot {
         width: 8px; height: 8px; border-radius: 50%;
         display: inline-block; margin-right: 6px;
@@ -50,18 +45,39 @@
         0%, 100% { opacity: 1; transform: scale(1); }
         50%       { opacity: .5; transform: scale(1.3); }
       }
-
       .ack-btn:hover  { background: #f0fdf4; border-color: #86efac; color: #15803d; }
       .close-btn:hover { background: #fff1f2; color: #e11d48; }
-
-      /* Severity left bar glow */
       .bar-critical { background: #ef4444; box-shadow: 0 0 8px #ef444480; }
       .bar-warning  { background: #f59e0b; box-shadow: 0 0 8px #f59e0b60; }
       .bar-ml       { background: #8b5cf6; box-shadow: 0 0 8px #8b5cf650; }
       .bar-info     { background: #3b82f6; box-shadow: 0 0 8px #3b82f640; }
-
-      /* Summary ribbon */
       .summary-ribbon { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); }
+
+      /* Real-time section pulse ring */
+      .rt-section-header {
+        display: flex; align-items: center; gap: .6rem;
+        padding: .6rem 1rem;
+        background: linear-gradient(90deg, #fee2e2, #fef3c7);
+        border-radius: 12px;
+        border: 1px solid #fca5a5;
+        margin-bottom: .75rem;
+      }
+      .rt-live-dot {
+        width: 10px; height: 10px; border-radius: 50%;
+        background: #ef4444;
+        box-shadow: 0 0 0 0 #ef444460;
+        animation: rtPulse 1.8s infinite;
+        flex-shrink: 0;
+      }
+      @keyframes rtPulse {
+        0%   { box-shadow: 0 0 0 0 #ef444480; }
+        70%  { box-shadow: 0 0 0 8px transparent; }
+        100% { box-shadow: 0 0 0 0 transparent; }
+      }
+
+      /* Spinner for refresh */
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .sg-spinning { animation: spin .7s linear infinite; display: inline-block; }
     </style>
   </head>
 
@@ -71,7 +87,7 @@
 
       <main class="flex-1 overflow-y-auto">
 
-        <!-- ── TOP BAR ─────────────────────────────────────── -->
+        <!-- TOP BAR -->
         <div class="bg-white border-b px-6 py-4 flex items-center justify-between sticky top-0 z-20">
           <div>
             <h1 class="font-bold text-gray-900 text-base">Alerts &amp; Notifications</h1>
@@ -79,13 +95,17 @@
           </div>
 
           <div class="flex items-center gap-3">
+            <!-- Refresh button -->
+            <button id="refreshBtn"
+              onclick="handleManualRefresh()"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 text-gray-600 text-xs font-semibold hover:bg-blue-50 hover:text-blue-600 transition-colors">
+              <span id="refreshIcon">↻</span> Refresh
+            </button>
+
             <div class="relative">
-              <input
-                id="alertSearch"
+              <input id="alertSearch"
                 class="w-72 border border-gray-200 rounded-xl px-4 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Search alerts…"
-                oninput="filterAlerts()"
-              />
+                placeholder="Search alerts…" oninput="filterAlerts()" />
               <span class="absolute right-3 top-2.5 text-gray-400 text-sm pointer-events-none">⌕</span>
             </div>
 
@@ -93,9 +113,11 @@
             <button class="relative w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
               🔔
               {% if counts.all > 0 %}
-              <span class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-semibold">
+              <span class="sg-bell-count absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-semibold">
                 {{ counts.all }}
               </span>
+              {% else %}
+              <span class="sg-bell-count absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-semibold" style="display:none">0</span>
               {% endif %}
             </button>
 
@@ -107,12 +129,12 @@
 
         <div class="p-6 max-w-5xl mx-auto">
 
-          <!-- ── SUMMARY RIBBON ──────────────────────────────── -->
+          <!-- SUMMARY RIBBON -->
           <div class="summary-ribbon rounded-2xl p-5 mb-6 flex flex-wrap gap-6 items-center text-white">
             <div class="flex-1 min-w-0">
               <p class="text-xs text-white/50 uppercase tracking-widest mb-1">Alert Summary</p>
-              <p class="text-2xl font-bold">{{ counts.all }} Active Alerts</p>
-              <p class="text-xs text-white/50 mt-1">Updated in real-time from ML pipeline</p>
+              <p class="text-2xl font-bold" id="totalAlertCount">{{ counts.all }} Active Alerts</p>
+              <p class="text-xs text-white/50 mt-1">ML pipeline + real-time product monitoring</p>
             </div>
             <div class="flex gap-5 flex-wrap">
               <div class="text-center">
@@ -128,41 +150,57 @@
                 <div class="text-xs text-white/50 mt-0.5">ML Insights</div>
               </div>
               <div class="text-center">
-                <div class="text-2xl font-bold text-blue-400">{{ counts.info }}</div>
-                <div class="text-xs text-white/50 mt-0.5">Info</div>
+                <div class="text-2xl font-bold text-green-400" id="rtCount">0</div>
+                <div class="text-xs text-white/50 mt-0.5">⚡ Real-Time</div>
               </div>
             </div>
           </div>
 
-          <!-- ── TABS ────────────────────────────────────────── -->
-          <div class="flex flex-wrap gap-2 mb-5" id="tabs">
-            <button data-filter="all"      class="tab-btn active px-4 py-1.5 rounded-xl text-xs font-semibold border border-transparent" onclick="setTab(this,'all')">All ({{ counts.all }})</button>
-            <button data-filter="critical" class="tab-btn px-4 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200" onclick="setTab(this,'critical')">🔴 Critical ({{ counts.critical }})</button>
-            <button data-filter="warning"  class="tab-btn px-4 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200" onclick="setTab(this,'warning')">⚠️ Warnings ({{ counts.warning }})</button>
-            <button data-filter="ml"       class="tab-btn px-4 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200" onclick="setTab(this,'ml')">🤖 ML Insights ({{ counts.ml }})</button>
-            <button data-filter="info"     class="tab-btn px-4 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200" onclick="setTab(this,'info')">ℹ️ Info ({{ counts.info }})</button>
+          <!-- ══ REAL-TIME SECTION ══════════════════════════════ -->
+          <div class="mb-8">
+            <div class="rt-section-header">
+              <div class="rt-live-dot"></div>
+              <div>
+                <span class="font-bold text-red-700 text-sm">Real-Time Alerts</span>
+                <span class="ml-2 text-xs text-red-500 font-semibold bg-red-100 px-2 py-0.5 rounded-full" id="sg-rt-count-pill">…</span>
+              </div>
+              <span class="text-xs text-amber-700 ml-auto">Fired instantly from manually added inventory — no ML rebuild required</span>
+            </div>
+
+            <!-- Real-time cards injected by sidebar.html's polling script -->
+            <div id="sg-realtime-alerts" class="space-y-3">
+              <div class="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-gray-400 text-sm">
+                <div class="sg-spinning text-2xl mb-2">↻</div>
+                <p>Loading real-time alerts…</p>
+              </div>
+            </div>
           </div>
 
-          <!-- ── ALERTS LIST ─────────────────────────────────── -->
+          <!-- ── TABS (ML alerts) ──────────────────────────────── -->
+          <div class="mb-3">
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">ML Pipeline Alerts</p>
+            <div class="flex flex-wrap gap-2 mb-4" id="tabs">
+              <button data-filter="all"      class="tab-btn active px-4 py-1.5 rounded-xl text-xs font-semibold border border-transparent" onclick="setTab(this,'all')">All ({{ counts.all }})</button>
+              <button data-filter="critical" class="tab-btn px-4 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200" onclick="setTab(this,'critical')">🔴 Critical ({{ counts.critical }})</button>
+              <button data-filter="warning"  class="tab-btn px-4 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200" onclick="setTab(this,'warning')">⚠️ Warnings ({{ counts.warning }})</button>
+              <button data-filter="ml"       class="tab-btn px-4 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200" onclick="setTab(this,'ml')">🤖 ML Insights ({{ counts.ml }})</button>
+              <button data-filter="info"     class="tab-btn px-4 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200" onclick="setTab(this,'info')">ℹ️ Info ({{ counts.info }})</button>
+            </div>
+          </div>
+
+          <!-- ML ALERTS LIST -->
           <div class="space-y-3" id="alertsList">
-
             {% for alert in alerts_data %}
-            <div
-              class="alert-card bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+            <div class="alert-card bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
               data-type="{{ alert.type }}"
-              data-search="{{ (alert.title ~ ' ' ~ alert.subtitle ~ ' ' ~ alert.message) | lower }}"
-            >
+              data-search="{{ (alert.title ~ ' ' ~ alert.subtitle ~ ' ' ~ alert.message) | lower }}">
               <div class="flex">
-
-                <!-- Severity bar -->
                 <div class="w-1.5 flex-shrink-0
                   {% if alert.type == 'critical' %}bar-critical
                   {% elif alert.type == 'warning' %}bar-warning
                   {% elif alert.type == 'ml' %}bar-ml
-                  {% else %}bar-info{% endif %}">
-                </div>
+                  {% else %}bar-info{% endif %}"></div>
 
-                <!-- Card body -->
                 <div class="flex-1 p-4
                   {% if alert.type == 'critical' %}bg-red-50/40
                   {% elif alert.type == 'warning' %}bg-amber-50/40
@@ -170,10 +208,7 @@
                   {% else %}bg-blue-50/30{% endif %}">
 
                   <div class="flex items-start justify-between gap-4">
-
                     <div class="flex items-start gap-3 flex-1 min-w-0">
-
-                      <!-- Icon bubble -->
                       <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0
                         {% if alert.type == 'critical' %}bg-red-100
                         {% elif alert.type == 'warning' %}bg-amber-100
@@ -183,8 +218,6 @@
                       </div>
 
                       <div class="flex-1 min-w-0">
-
-                        <!-- Title row -->
                         <div class="flex items-center gap-2 flex-wrap">
                           {% if alert.type == 'critical' %}
                             <span class="pulse-dot bg-red-500"></span>
@@ -196,8 +229,6 @@
                             {% else %}text-blue-700{% endif %}">
                             {{ alert.title }}
                           </h3>
-
-                          <!-- Type badge -->
                           <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full
                             {% if alert.type == 'critical' %}bg-red-100 text-red-600
                             {% elif alert.type == 'warning' %}bg-amber-100 text-amber-700
@@ -207,175 +238,117 @@
                           </span>
                         </div>
 
-                        <!-- Product name -->
                         {% if alert.subtitle %}
                           <p class="text-xs text-gray-500 mt-0.5 font-medium">{{ alert.subtitle }}</p>
                         {% endif %}
-
-                        <!-- Main message -->
                         <p class="text-sm text-gray-700 mt-2 leading-relaxed">{{ alert.message }}</p>
 
-                        <!-- ── DATA PILLS ─────────────────────────────── -->
                         {% if alert.stock_level is defined and alert.stock_level is not none %}
                         <div class="flex flex-wrap gap-2 mt-3">
-
                           {% if alert.stock_level is not none %}
-                          <span class="stat-pill bg-gray-100 text-gray-600">
-                            📦 Stock: <strong>{{ alert.stock_level | int }}</strong> units
-                          </span>
+                          <span class="stat-pill bg-gray-100 text-gray-600">📦 Stock: <strong>{{ alert.stock_level | int }}</strong> units</span>
                           {% endif %}
-
                           {% if alert.reorder_point is defined and alert.reorder_point is not none %}
-                          <span class="stat-pill
-                            {% if alert.stock_level | int <= alert.reorder_point | int %}bg-red-100 text-red-600{% else %}bg-green-100 text-green-600{% endif %}">
+                          <span class="stat-pill {% if alert.stock_level | int <= alert.reorder_point | int %}bg-red-100 text-red-600{% else %}bg-green-100 text-green-600{% endif %}">
                             🔁 Reorder @ {{ alert.reorder_point | int }}
                           </span>
                           {% endif %}
-
                           {% if alert.days_to_expiry is defined and alert.days_to_expiry is not none %}
-                          <span class="stat-pill
-                            {% if alert.days_to_expiry | int <= 7 %}bg-red-100 text-red-600
-                            {% elif alert.days_to_expiry | int <= 30 %}bg-amber-100 text-amber-700
-                            {% else %}bg-green-100 text-green-600{% endif %}">
+                          <span class="stat-pill {% if alert.days_to_expiry | int <= 7 %}bg-red-100 text-red-600{% elif alert.days_to_expiry | int <= 30 %}bg-amber-100 text-amber-700{% else %}bg-green-100 text-green-600{% endif %}">
                             📅 Expires in {{ alert.days_to_expiry | int }} days
                           </span>
                           {% endif %}
-
                           {% if alert.quantity is defined and alert.quantity is not none %}
-                          <span class="stat-pill bg-blue-100 text-blue-700">
-                            🛒 Qty: {{ alert.quantity | int }}
-                          </span>
+                          <span class="stat-pill bg-blue-100 text-blue-700">🛒 Qty: {{ alert.quantity | int }}</span>
                           {% endif %}
-
                           {% if alert.sales is defined and alert.sales is not none %}
-                          <span class="stat-pill bg-emerald-100 text-emerald-700">
-                            💰 Sales: ${{ "%.0f" | format(alert.sales | float) }}
-                          </span>
+                          <span class="stat-pill bg-emerald-100 text-emerald-700">💰 Sales: ${{ "%.0f" | format(alert.sales | float) }}</span>
                           {% endif %}
-
                           {% if alert.profit is defined and alert.profit is not none %}
-                          <span class="stat-pill
-                            {% if alert.profit | float < 0 %}bg-red-100 text-red-600{% else %}bg-green-100 text-green-700{% endif %}">
+                          <span class="stat-pill {% if alert.profit | float < 0 %}bg-red-100 text-red-600{% else %}bg-green-100 text-green-700{% endif %}">
                             📈 Profit: ${{ "%.0f" | format(alert.profit | float) }}
                           </span>
                           {% endif %}
-
                           {% if alert.avg_discount is defined and alert.avg_discount is not none %}
-                          <span class="stat-pill bg-orange-100 text-orange-700">
-                            🏷️ Discount: {{ alert.avg_discount }}%
-                          </span>
+                          <span class="stat-pill bg-orange-100 text-orange-700">🏷️ Discount: {{ alert.avg_discount }}%</span>
                           {% endif %}
-
                         </div>
                         {% endif %}
 
-                        <!-- ── STOCK LEVEL PROGRESS BAR (for stock alerts) ── -->
                         {% if alert.stock_level is defined and alert.stock_level is not none and alert.reorder_point is defined and alert.reorder_point is not none and alert.reorder_point | int > 0 %}
                         <div class="mt-3">
                           {% set pct = [(alert.stock_level | float / alert.reorder_point | float * 100), 100] | min %}
                           <div class="flex justify-between text-xs text-gray-400 mb-1">
-                            <span>Stock vs Reorder Point</span>
-                            <span>{{ "%.0f" | format(pct) }}%</span>
+                            <span>Stock vs Reorder Point</span><span>{{ "%.0f" | format(pct) }}%</span>
                           </div>
                           <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                            <div class="progress-bar h-1.5 rounded-full
-                              {% if pct <= 50 %}bg-red-500
-                              {% elif pct <= 100 %}bg-amber-400
-                              {% else %}bg-green-500{% endif %}"
-                              style="width: {{ pct }}%">
-                            </div>
+                            <div class="progress-bar h-1.5 rounded-full {% if pct <= 50 %}bg-red-500{% elif pct <= 100 %}bg-amber-400{% else %}bg-green-500{% endif %}" style="width: {{ pct }}%"></div>
                           </div>
                         </div>
                         {% endif %}
 
-                        <!-- ── ANOMALY DETAILS ── -->
                         {% if alert.type == 'critical' and alert.anomaly_count is defined and alert.anomaly_count is not none %}
                         <div class="mt-3 flex flex-wrap gap-2">
-                          <span class="stat-pill bg-red-100 text-red-600">
-                            🤖 IF Flags: {{ alert.anomaly_count }}
-                          </span>
+                          <span class="stat-pill bg-red-100 text-red-600">🤖 IF Flags: {{ alert.anomaly_count }}</span>
                           {% if alert.profit_margin is defined and alert.profit_margin is not none %}
-                          <span class="stat-pill
-                            {% if alert.profit_margin | float < 0 %}bg-red-100 text-red-600{% else %}bg-gray-100 text-gray-600{% endif %}">
+                          <span class="stat-pill {% if alert.profit_margin | float < 0 %}bg-red-100 text-red-600{% else %}bg-gray-100 text-gray-600{% endif %}">
                             Margin: {{ alert.profit_margin }}%
                           </span>
                           {% endif %}
                         </div>
                         {% endif %}
 
-                        <!-- ── ML INSIGHT METRICS ── -->
                         {% if alert.type == 'ml' %}
                         <div class="mt-3 flex flex-wrap gap-2">
                           {% if alert.total_quantity is defined and alert.total_quantity is not none %}
-                          <span class="stat-pill bg-violet-100 text-violet-700">
-                            📊 Total Qty: {{ alert.total_quantity | int }}
-                          </span>
+                          <span class="stat-pill bg-violet-100 text-violet-700">📊 Total Qty: {{ alert.total_quantity | int }}</span>
                           {% endif %}
                           {% if alert.total_sales is defined and alert.total_sales is not none %}
-                          <span class="stat-pill bg-violet-100 text-violet-700">
-                            💰 Revenue: ${{ "%.0f" | format(alert.total_sales | float) }}
-                          </span>
+                          <span class="stat-pill bg-violet-100 text-violet-700">💰 Revenue: ${{ "%.0f" | format(alert.total_sales | float) }}</span>
                           {% endif %}
                           {% if alert.avg_margin is defined and alert.avg_margin is not none %}
-                          <span class="stat-pill
-                            {% if alert.avg_margin | float < 0 %}bg-red-100 text-red-600{% else %}bg-green-100 text-green-700{% endif %}">
+                          <span class="stat-pill {% if alert.avg_margin | float < 0 %}bg-red-100 text-red-600{% else %}bg-green-100 text-green-700{% endif %}">
                             Margin: {{ alert.avg_margin }}%
                           </span>
                           {% endif %}
                         </div>
                         {% endif %}
 
-                        <!-- Action buttons -->
                         <div class="mt-4 flex flex-wrap gap-2">
-                          <button type="button"
-                            class="action-btn px-3 py-1.5 text-xs rounded-xl bg-blue-600 text-white font-semibold hover:opacity-90 transition-opacity">
-                            {{ alert.action }}
-                          </button>
-                          <button type="button"
-                            class="ack-btn px-3 py-1.5 text-xs rounded-xl bg-white border border-gray-200 text-gray-600 font-medium transition-colors">
-                            ✓ Acknowledge
-                          </button>
-                          <button type="button"
-                            class="close-btn px-3 py-1.5 text-xs rounded-xl text-gray-400 font-medium transition-colors"
-                            onclick="this.closest('.alert-card').style.display='none'">
-                            ✕ Dismiss
-                          </button>
+                          <button type="button" class="action-btn px-3 py-1.5 text-xs rounded-xl bg-blue-600 text-white font-semibold hover:opacity-90 transition-opacity">{{ alert.action }}</button>
+                          <button type="button" class="ack-btn px-3 py-1.5 text-xs rounded-xl bg-white border border-gray-200 text-gray-600 font-medium transition-colors">✓ Acknowledge</button>
+                          <button type="button" class="close-btn px-3 py-1.5 text-xs rounded-xl text-gray-400 font-medium transition-colors"
+                            onclick="this.closest('.alert-card').style.display='none'">✕ Dismiss</button>
                         </div>
+                      </div>
+                    </div>
 
-                      </div><!-- /content col -->
-                    </div><!-- /flex row -->
-
-                    <!-- Timestamp -->
                     <div class="text-right flex-shrink-0">
                       <span class="text-xs text-gray-400">{{ alert.time }}</span>
                       {% if alert.region is defined and alert.region %}
                         <p class="text-xs text-gray-300 mt-0.5">{{ alert.region }}</p>
                       {% endif %}
                     </div>
-
-                  </div><!-- /top flex -->
-                </div><!-- /card body -->
-              </div><!-- /bar + body -->
-            </div><!-- /alert-card -->
+                  </div>
+                </div>
+              </div>
+            </div>
             {% endfor %}
 
             {% if not alerts_data %}
             <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
               <div class="text-5xl mb-3">✅</div>
-              <p class="text-gray-500 font-medium">No alerts at this time.</p>
-              <p class="text-gray-400 text-sm mt-1">Your inventory is healthy.</p>
+              <p class="text-gray-500 font-medium">No ML alerts at this time.</p>
             </div>
             {% endif %}
+          </div>
 
-          </div><!-- /alertsList -->
-
-          <!-- No search results -->
           <div id="noResults" class="hidden bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center mt-4">
             <div class="text-4xl mb-3">🔍</div>
             <p class="text-gray-500 font-medium">No alerts match your search.</p>
           </div>
 
-        </div><!-- /page body -->
+        </div>
       </main>
     </div>
 
@@ -384,7 +357,6 @@
 
       function setTab(btn, filter) {
         currentFilter = filter;
-        // Update tab button styles
         document.querySelectorAll('.tab-btn').forEach(b => {
           b.classList.remove('active', 'bg-blue-600', 'text-white', 'border-transparent');
           b.classList.add('bg-gray-100', 'text-gray-600');
@@ -396,32 +368,51 @@
 
       function filterAlerts() {
         const search = document.getElementById('alertSearch').value.toLowerCase().trim();
-        const cards  = document.querySelectorAll('.alert-card');
+        const cards  = document.querySelectorAll('#alertsList .alert-card');
         let visible  = 0;
-
         cards.forEach(card => {
           const typeMatch   = currentFilter === 'all' || card.dataset.type === currentFilter;
           const searchMatch = !search || card.dataset.search.includes(search);
-          if (typeMatch && searchMatch) {
-            card.style.display = '';
-            visible++;
-          } else {
-            card.style.display = 'none';
-          }
+          card.style.display = (typeMatch && searchMatch) ? '' : 'none';
+          if (typeMatch && searchMatch) visible++;
         });
-
         document.getElementById('noResults').classList.toggle('hidden', visible > 0);
       }
 
-      // Acknowledge button — mark green
+      // Acknowledge button
       document.addEventListener('click', e => {
         if (e.target.classList.contains('ack-btn')) {
           const btn = e.target;
           btn.textContent = '✓ Acknowledged';
-          btn.classList.add('bg-green-50', 'border-green-200', 'text-green-700');
-          btn.classList.remove('border-gray-200', 'text-gray-600');
+          btn.classList.add('bg-green-50','border-green-200','text-green-700');
+          btn.classList.remove('border-gray-200','text-gray-600');
           btn.disabled = true;
         }
+      });
+
+      // Manual refresh — triggers immediate real-time fetch + spinner
+      async function handleManualRefresh() {
+        const icon = document.getElementById('refreshIcon');
+        icon.classList.add('sg-spinning');
+        if (window.sgFetchLiveAlerts) {
+          await window.sgFetchLiveAlerts(false);
+        }
+        setTimeout(() => icon.classList.remove('sg-spinning'), 800);
+      }
+
+      // Update the real-time counter in the summary ribbon
+      const _origInject = window.sgFetchLiveAlerts;
+      document.addEventListener('DOMContentLoaded', () => {
+        // Hook into the rt count pill to also update ribbon counter
+        const observer = new MutationObserver(() => {
+          const pill = document.getElementById('sg-rt-count-pill');
+          const ribbon = document.getElementById('rtCount');
+          if (pill && ribbon && pill.textContent !== '…') {
+            ribbon.textContent = pill.textContent;
+          }
+        });
+        const pill = document.getElementById('sg-rt-count-pill');
+        if (pill) observer.observe(pill, { childList: true, characterData: true, subtree: true });
       });
     </script>
   </body>

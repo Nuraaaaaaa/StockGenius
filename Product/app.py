@@ -8,6 +8,7 @@ import subprocess
 import sys
 import os
 import uuid
+from datetime import datetime
 
 
 app = Flask(__name__)
@@ -1253,6 +1254,177 @@ def margin_by_category():
         db.close_connection(conn)
 
 
+ 
+@app.route("/api/alerts/live")
+@login_required
+def alerts_live():
+    """
+    Return JSON list of real-time alerts derived directly from
+    manual_products (no ML pipeline needed).  The frontend polls
+    this every 30 s and shows toast notifications for new items.
+    """
+    conn = db.open_connection()
+    try:
+        rows = db.run_query(conn, """
+            SELECT
+                id,
+                product_name,
+                sub_category,
+                category,
+                stock_level,
+                reorder_point,
+                shelf_life_days          AS days_to_expiry,
+                sales,
+                quantity,
+                profit,
+                ROUND(discount * 100, 1) AS avg_discount,
+                order_date,
+                region,
+                state
+            FROM manual_products
+            WHERE
+                (stock_level IS NOT NULL AND reorder_point IS NOT NULL
+                    AND stock_level < reorder_point)
+                OR
+                (shelf_life_days IS NOT NULL AND shelf_life_days <= 30)
+            ORDER BY
+                CASE
+                    WHEN stock_level < reorder_point * 0.5 THEN 0   -- critical low stock
+                    WHEN shelf_life_days <= 7              THEN 1   -- critical expiry
+                    WHEN shelf_life_days <= 30             THEN 2   -- warning expiry
+                    ELSE 3                                           -- warning low stock
+                END,
+                stock_level ASC
+        """)
+ 
+        alerts = []
+        for r in rows:
+            sl   = int(r["stock_level"]   or 0)
+            rp   = int(r["reorder_point"] or 0)
+            dte  = int(r["days_to_expiry"] or 9999)
+            name = r["sub_category"] or r["product_name"] or "Unknown"
+ 
+            # ── Determine severity & message ──────────────────────
+            if sl < rp and sl <= rp * 0.5:
+                alert_type = "critical"
+                title      = "Critical Stock Level"
+                icon       = "📦"
+                deficit    = max(0, rp - sl)
+                pct        = round((sl / max(rp, 1)) * 100)
+                message    = (
+                    f"{name} has only {sl} units — {pct}% of the reorder threshold "
+                    f"({rp}). Order at least {deficit} units immediately."
+                )
+                action = "Reorder Now"
+ 
+            elif dte <= 7:
+                alert_type = "critical"
+                title      = "Urgent — Expiry Within 7 Days"
+                icon       = "🗓️"
+                message    = (
+                    f"{name} expires in {dte} day(s). "
+                    f"{int(r['quantity'] or 0)} units at risk "
+                    f"(≈ ${float(r['sales'] or 0):.0f} in revenue). "
+                    f"Consider flash discount or redistribution."
+                )
+                action = "Apply Discount"
+ 
+            elif dte <= 30:
+                alert_type = "warning"
+                title      = "Near Expiry Warning"
+                icon       = "⚠️"
+                message    = (
+                    f"{name} will expire in {dte} days. "
+                    f"Stock: {sl} units across {int(r['quantity'] or 0)} orders. "
+                    f"Review pricing or schedule clearance promotion."
+                )
+                action = "Review Item"
+ 
+            else:
+                # low stock but above 50 % threshold
+                alert_type = "warning"
+                title      = "Low Stock Alert"
+                icon       = "⚠️"
+                message    = (
+                    f"{name} stock ({sl} units) is below the reorder point of "
+                    f"{rp} units. Plan a replenishment order."
+                )
+                action = "Plan Reorder"
+ 
+            alerts.append({
+                "id":            f"manual_{r['id']}",
+                "type":          alert_type,
+                "icon":          icon,
+                "title":         title,
+                "subtitle":      f"{name}  ·  {r['region'] or r['state'] or ''}",
+                "message":       message,
+                "action":        action,
+                "time":          "Real-time",
+                "source":        "realtime",
+                "product_name":  name,
+                "stock_level":   sl,
+                "reorder_point": rp,
+                "days_to_expiry": dte,
+                "quantity":      int(r["quantity"] or 0),
+                "sales":         float(r["sales"] or 0),
+                "profit":        float(r["profit"] or 0),
+                "avg_discount":  float(r["avg_discount"] or 0),
+                "region":        r["region"] or "",
+            })
+ 
+        counts = {
+            "total":    len(alerts),
+            "critical": sum(1 for a in alerts if a["type"] == "critical"),
+            "warning":  sum(1 for a in alerts if a["type"] == "warning"),
+        }
+ 
+        return jsonify({"alerts": alerts, "counts": counts, "ts": datetime.utcnow().isoformat()})
+ 
+    finally:
+        db.close_connection(conn)
+ 
+ 
+@app.route("/api/alerts/count")
+@login_required
+def alerts_count():
+    """
+    Ultra-lightweight endpoint for the bell-badge poller.
+    Returns total count of real-time alerts + ML alerts.
+    """
+    conn = db.open_connection()
+    try:
+        # real-time (manual products)
+        rt = db.run_query(conn, """
+            SELECT COUNT(*) AS n FROM manual_products
+            WHERE (stock_level < reorder_point)
+               OR (shelf_life_days <= 30 AND shelf_life_days IS NOT NULL)
+        """)[0]["n"]
+ 
+        # ML pipeline alerts
+        ml = db.run_query(conn, """
+            SELECT
+                SUM(CASE WHEN is_anomaly = 1 THEN 1 ELSE 0 END) AS anomalies,
+                SUM(CASE WHEN low_stock   = 1 THEN 1 ELSE 0 END) AS low_stock,
+                SUM(CASE WHEN near_expiry = 1 THEN 1 ELSE 0 END) AS near_expiry
+            FROM ml_inventory
+        """)[0]
+ 
+        total = (
+            int(rt or 0)
+            + min(int(ml["anomalies"] or 0), 5)
+            + min(int(ml["low_stock"]  or 0), 10)
+            + min(int(ml["near_expiry"]or 0), 10)
+        )
+ 
+        return jsonify({
+            "total":    total,
+            "realtime": int(rt or 0),
+            "ml":       int((ml["anomalies"] or 0) + (ml["low_stock"] or 0) + (ml["near_expiry"] or 0)),
+        })
+ 
+    finally:
+        db.close_connection(conn)
+ 
 
 @app.route("/api/chat", methods=["POST"])
 @login_required
