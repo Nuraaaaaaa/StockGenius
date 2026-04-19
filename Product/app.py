@@ -1,15 +1,12 @@
 from flask import Flask, render_template, redirect, session, url_for, jsonify, request
 from database.database import MySqlConnection
-from werkzeug.security import generate_password_hash
-from werkzeug.security import check_password_hash
-from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import subprocess
 import sys
 import os
 import uuid
 from datetime import datetime
-
 
 app = Flask(__name__)
 app.secret_key = "9#kL2!xQz@81bP$7vR_stockgenius_2026"
@@ -20,7 +17,118 @@ UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "images", "uploads")
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif"}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+VALID_ROLES = {"admin", "inventory_manager", "staff"}
 
+ACTION_STATUSES = {"pending", "in_progress", "resolved", "cancelled"}
+ACTION_TYPES = {"restock_request", "shelf_check", "damage_report", "expiry_verification", "anomaly_escalation"}
+
+def _create_staff_action_db(action_type, product_name, note="", priority="medium", source="manual"):
+    conn = db.open_connection()
+    try:
+        db.execute_update(conn, """
+            INSERT INTO staff_actions (
+                action_code, product_name, note, priority, source, status,
+                created_by, created_by_role
+            )
+            VALUES (%s, %s, %s, %s, %s, 'pending', %s, %s)
+        """, (
+            action_type,
+            product_name,
+            note,
+            priority,
+            source,
+            session.get("user_name", "Unknown"),
+            session.get("role", "staff"),
+        ))
+        conn.commit()
+
+        row = db.run_query(conn, """
+            SELECT id, action_code, product_name, note, priority, source, status,
+                   created_by, created_by_role, updated_by, created_at, updated_at
+            FROM staff_actions
+            ORDER BY id DESC
+            LIMIT 1
+        """)
+        return row[0] if row else None
+    finally:
+        db.close_connection(conn)
+
+
+def _list_staff_actions_db(role, status_filter="", created_by=""):
+    conn = db.open_connection()
+    try:
+        query = """
+            SELECT id, action_code, product_name, note, priority, source, status,
+                   created_by, created_by_role, updated_by, created_at, updated_at
+            FROM staff_actions
+            WHERE 1=1
+        """
+        params = []
+
+        if status_filter:
+            query += " AND status = %s"
+            params.append(status_filter)
+
+        if role == "staff":
+            query += " AND created_by = %s"
+            params.append(created_by)
+
+        query += " ORDER BY id DESC LIMIT 30"
+
+        return db.run_query(conn, query, tuple(params))
+    finally:
+        db.close_connection(conn)
+
+
+def _get_staff_action_summary_db():
+    conn = db.open_connection()
+    try:
+        row = db.run_query(conn, """
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending,
+                SUM(CASE WHEN status='in_progress' THEN 1 ELSE 0 END) AS in_progress,
+                SUM(CASE WHEN status='resolved' THEN 1 ELSE 0 END) AS resolved
+            FROM staff_actions
+        """)[0]
+
+        return {
+            "total": int(row["total"] or 0),
+            "pending": int(row["pending"] or 0),
+            "in_progress": int(row["in_progress"] or 0),
+            "resolved": int(row["resolved"] or 0),
+        }
+    finally:
+        db.close_connection(conn)
+
+
+def _update_staff_action_status_db(action_id, new_status):
+    conn = db.open_connection()
+    try:
+        db.execute_update(conn, """
+            UPDATE staff_actions
+            SET status = %s,
+                updated_by = %s
+            WHERE id = %s
+        """, (
+            new_status,
+            session.get("user_name", "Unknown"),
+            action_id,
+        ))
+        conn.commit()
+
+        row = db.run_query(conn, """
+            SELECT id, action_code, product_name, note, priority, source, status,
+                   created_by, created_by_role, updated_by, created_at, updated_at
+            FROM staff_actions
+            WHERE id = %s
+            LIMIT 1
+        """, (action_id,))
+
+        return row[0] if row else None
+    finally:
+        db.close_connection(conn)
+        
 def _allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -37,6 +145,8 @@ def _save_uploaded_image(file_storage):
     return f"/static/images/uploads/{unique_name}"
 
 
+# ── Decorators ───────────────────────────────────────────────────────────────
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -44,6 +154,7 @@ def login_required(f):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
+
 
 
 def admin_required(f):
@@ -56,6 +167,20 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+
+
+def inventory_access_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        if session.get("role") not in ("admin", "inventory_manager"):
+            return jsonify({"message": "Permission denied. Inventory managers and admins only."}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ── Pages ────────────────────────────────────────────────────────────────────
 
 @app.route("/")
 def home():
@@ -70,8 +195,20 @@ def login():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    return render_template("dashboard.html", active_page="dashboard",
-                           user_name=session.get("user_name"), user_role=session.get("role"))
+    role = session.get("role")
+    if role == "inventory_manager":
+        return render_template(
+            "inventory_manager_dashboard.html",
+            active_page="dashboard",
+            user_name=session.get("user_name"),
+            user_role=role,
+        )
+    return render_template(
+        "dashboard.html",
+        active_page="dashboard",
+        user_name=session.get("user_name"),
+        user_role=role,
+    )
 
 
 @app.route("/inventory")
@@ -98,12 +235,11 @@ def inventory():
         "Labels": "https://images.unsplash.com/photo-1586075010923-2dd4570fb338",
         "Envelopes": url_for("static", filename="images/envelopes.avif"),
         "Fasteners": "https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc",
-        "Furnishings": "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85"
+        "Furnishings": "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85",
     }
 
     conn = db.open_connection()
     try:
-        # Total count for pagination
         count_row = db.run_query(conn, """
             SELECT COUNT(*) AS total
             FROM (
@@ -116,7 +252,6 @@ def inventory():
         total_items = int(count_row["total"])
         total_pages = (total_items + per_page - 1) // per_page
 
-        # Paginated products
         products = db.run_query(conn, """
             SELECT
                 sub_category,
@@ -137,16 +272,13 @@ def inventory():
             LIMIT %s OFFSET %s
         """, (per_page, offset))
 
-        # ── FIX: fetch ALL distinct categories for the filter dropdown ──
         all_categories = db.run_query(conn, """
             SELECT DISTINCT category
             FROM ml_inventory
             ORDER BY category
         """)
 
-        # Attach image to each product card
         for product in products:
-            # Use uploaded image from manual_products if available
             manual = db.run_query(conn, """
                 SELECT image_url FROM manual_products
                 WHERE sub_category = %s AND image_url IS NOT NULL AND image_url != ''
@@ -164,42 +296,31 @@ def inventory():
         return render_template(
             "inventory.html",
             products=products,
-            all_categories=[r["category"] for r in all_categories],  # ← full list for dropdown
+            all_categories=[r["category"] for r in all_categories],
             active_page="inventory",
             user_name=session.get("user_name"),
             user_role=session.get("role"),
             page=page,
-            total_pages=total_pages
+            total_pages=total_pages,
         )
-
     finally:
         db.close_connection(conn)
 
 
-# ═══════════════════════════════════════════════════════════════
-# GET PRODUCT BY SUB_CATEGORY  (used by Edit modal)
-# ═══════════════════════════════════════════════════════════════
+# ── Inventory API — read endpoints ───────────────────────────────────────────
+
 @app.route("/api/products/by-name/<path:sub_category>", methods=["GET"])
 @login_required
 def get_product_by_name(sub_category):
     conn = db.open_connection()
     try:
-        # First try manual_products (user-added records)
         rows = db.run_query(conn, """
             SELECT
-                id,
-                product_name,
-                category,
-                sub_category,
-                ROUND(sales, 2)          AS sales,
-                quantity,
+                id, product_name, category, sub_category,
+                ROUND(sales, 2) AS sales, quantity,
                 ROUND(discount * 100, 2) AS discount,
-                ROUND(profit, 2)         AS profit,
-                order_date,
-                stock_level,
-                reorder_point,
-                shelf_life_days,
-                image_url
+                ROUND(profit, 2) AS profit,
+                order_date, stock_level, reorder_point, shelf_life_days, image_url
             FROM manual_products
             WHERE sub_category = %s
             LIMIT 1
@@ -212,20 +333,19 @@ def get_product_by_name(sub_category):
             product["source"] = "manual"
             return jsonify(product), 200
 
-        # Fall back to ml_inventory (aggregated)
         rows = db.run_query(conn, """
             SELECT
                 sub_category,
-                MAX(category)                 AS category,
-                sub_category                  AS product_name,
-                ROUND(SUM(sales), 2)          AS sales,
-                SUM(quantity)                 AS quantity,
+                MAX(category) AS category,
+                sub_category AS product_name,
+                ROUND(SUM(sales), 2) AS sales,
+                SUM(quantity) AS quantity,
                 ROUND(AVG(discount) * 100, 2) AS discount,
-                ROUND(SUM(profit), 2)         AS profit,
-                MAX(order_date)               AS order_date,
-                ROUND(AVG(stock_level), 0)    AS stock_level,
-                ROUND(AVG(reorder_point), 0)  AS reorder_point,
-                365                           AS shelf_life_days
+                ROUND(SUM(profit), 2) AS profit,
+                MAX(order_date) AS order_date,
+                ROUND(AVG(stock_level), 0) AS stock_level,
+                ROUND(AVG(reorder_point), 0) AS reorder_point,
+                365 AS shelf_life_days
             FROM ml_inventory
             WHERE sub_category = %s
             GROUP BY sub_category
@@ -241,14 +361,10 @@ def get_product_by_name(sub_category):
         product["image_url"] = ""
         product["source"] = "ml"
         return jsonify(product), 200
-
     finally:
         db.close_connection(conn)
 
 
-# ═══════════════════════════════════════════════════════════════
-# GET PRODUCT BY ID  (kept for backward compatibility)
-# ═══════════════════════════════════════════════════════════════
 @app.route("/api/products/<int:product_id>", methods=["GET"])
 @login_required
 def get_product(product_id):
@@ -260,8 +376,7 @@ def get_product(product_id):
                 ROUND(sales, 2) AS sales, quantity,
                 ROUND(discount * 100, 2) AS discount,
                 ROUND(profit, 2) AS profit,
-                order_date, stock_level, reorder_point, shelf_life_days,
-                image_url
+                order_date, stock_level, reorder_point, shelf_life_days, image_url
             FROM manual_products
             WHERE id = %s
             LIMIT 1
@@ -278,26 +393,25 @@ def get_product(product_id):
         db.close_connection(conn)
 
 
-# ═══════════════════════════════════════════════════════════════
-# ADD PRODUCT
-# ═══════════════════════════════════════════════════════════════
+# ── Inventory API — write endpoints ──────────────────────────────────────────
+
 @app.route("/api/products/add", methods=["POST"])
-@login_required
+@inventory_access_required
 def add_product():
     product_name = (request.form.get("product_name") or "").strip()
-    category     = (request.form.get("category")     or "").strip()
+    category = (request.form.get("category") or "").strip()
     sub_category = (request.form.get("sub_category") or "").strip()
 
     if not product_name or not category or not sub_category:
         return jsonify({"message": "Product name, category, and sub-category are required."}), 400
 
     try:
-        sales           = float(request.form.get("sales", 0)           or 0)
-        quantity        = int(request.form.get("quantity", 0)          or 0)
-        discount_input  = float(request.form.get("discount", 0)        or 0)
-        profit          = float(request.form.get("profit", 0)          or 0)
-        stock_level     = int(request.form.get("stock_level", 0)       or 0)
-        reorder_point   = int(request.form.get("reorder_point", 0)     or 0)
+        sales = float(request.form.get("sales", 0) or 0)
+        quantity = int(request.form.get("quantity", 0) or 0)
+        discount_input = float(request.form.get("discount", 0) or 0)
+        profit = float(request.form.get("profit", 0) or 0)
+        stock_level = int(request.form.get("stock_level", 0) or 0)
+        reorder_point = int(request.form.get("reorder_point", 0) or 0)
         shelf_life_days = int(request.form.get("shelf_life_days", 365) or 365)
     except ValueError:
         return jsonify({"message": "Please enter valid numeric values."}), 400
@@ -306,7 +420,6 @@ def add_product():
         return jsonify({"message": "Discount must be between 0 and 100 percent."}), 400
 
     discount_value = discount_input / 100.0
-
     image_url = None
     image_file = request.files.get("image")
     if image_file and image_file.filename:
@@ -314,13 +427,8 @@ def add_product():
         if image_url is None:
             return jsonify({"message": "Invalid image type. Allowed: PNG, JPG, WEBP, GIF."}), 400
 
-    rebuild_script  = os.path.join(BASE_DIR, "run_once_import.py")
+    rebuild_script = os.path.join(BASE_DIR, "run_once_import.py")
     forecast_script = os.path.join(BASE_DIR, "save_arima_forecast.py")
-
-    if not os.path.exists(rebuild_script):
-        return jsonify({"message": f"File not found: {rebuild_script}"}), 500
-    if not os.path.exists(forecast_script):
-        return jsonify({"message": f"File not found: {forecast_script}"}), 500
 
     conn = db.open_connection()
     try:
@@ -332,13 +440,13 @@ def add_product():
             ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             product_name,
-            request.form.get("ship_mode",   "Standard Class"),
-            request.form.get("segment",     "Consumer"),
-            request.form.get("country",     "United States"),
-            request.form.get("city",        "Unknown"),
-            request.form.get("state",       "Unknown"),
+            request.form.get("ship_mode", "Standard Class"),
+            request.form.get("segment", "Consumer"),
+            request.form.get("country", "United States"),
+            request.form.get("city", "Unknown"),
+            request.form.get("state", "Unknown"),
             request.form.get("postal_code", "00000"),
-            request.form.get("region",      "Unknown"),
+            request.form.get("region", "Unknown"),
             category, sub_category,
             sales, quantity, discount_value, profit,
             request.form.get("order_date") or None,
@@ -352,13 +460,10 @@ def add_product():
         db.close_connection(conn)
 
     try:
-        rebuild_result  = subprocess.run([sys.executable, rebuild_script],
-                                         check=True, capture_output=True, text=True, cwd=BASE_DIR)
-        forecast_result = subprocess.run([sys.executable, forecast_script],
-                                         check=True, capture_output=True, text=True, cwd=BASE_DIR)
+        rebuild_result = subprocess.run([sys.executable, rebuild_script], check=True, capture_output=True, text=True, cwd=BASE_DIR)
+        forecast_result = subprocess.run([sys.executable, forecast_script], check=True, capture_output=True, text=True, cwd=BASE_DIR)
     except subprocess.CalledProcessError as e:
-        return jsonify({"message": "Product saved, but rebuild failed.",
-                        "error": e.stderr or e.stdout or str(e)}), 500
+        return jsonify({"message": "Product saved, but rebuild failed.", "error": e.stderr or e.stdout or str(e)}), 500
 
     return jsonify({
         "message": "Product added and model data rebuilt successfully.",
@@ -368,27 +473,23 @@ def add_product():
     }), 201
 
 
-# ═══════════════════════════════════════════════════════════════
-# UPDATE PRODUCT BY SUB_CATEGORY
-# Upserts into manual_products so ml_inventory picks it up on rebuild
-# ═══════════════════════════════════════════════════════════════
 @app.route("/api/products/by-name/<path:sub_category>/update", methods=["POST"])
-@login_required
+@inventory_access_required
 def update_product_by_name(sub_category):
     product_name = (request.form.get("product_name") or "").strip()
-    category     = (request.form.get("category")     or "").strip()
-    new_sub      = (request.form.get("sub_category") or "").strip()
+    category = (request.form.get("category") or "").strip()
+    new_sub = (request.form.get("sub_category") or "").strip()
 
     if not product_name or not category or not new_sub:
         return jsonify({"message": "Product name, category, and sub-category are required."}), 400
 
     try:
-        sales           = float(request.form.get("sales", 0)           or 0)
-        quantity        = int(request.form.get("quantity", 0)          or 0)
-        discount_input  = float(request.form.get("discount", 0)        or 0)
-        profit          = float(request.form.get("profit", 0)          or 0)
-        stock_level     = int(request.form.get("stock_level", 0)       or 0)
-        reorder_point   = int(request.form.get("reorder_point", 0)     or 0)
+        sales = float(request.form.get("sales", 0) or 0)
+        quantity = int(request.form.get("quantity", 0) or 0)
+        discount_input = float(request.form.get("discount", 0) or 0)
+        profit = float(request.form.get("profit", 0) or 0)
+        stock_level = int(request.form.get("stock_level", 0) or 0)
+        reorder_point = int(request.form.get("reorder_point", 0) or 0)
         shelf_life_days = int(request.form.get("shelf_life_days", 365) or 365)
     except ValueError:
         return jsonify({"message": "Please enter valid numeric values."}), 400
@@ -397,8 +498,6 @@ def update_product_by_name(sub_category):
         return jsonify({"message": "Discount must be between 0 and 100 percent."}), 400
 
     discount_value = discount_input / 100.0
-
-    # Handle optional image
     new_image_url = None
     image_file = request.files.get("image")
     if image_file and image_file.filename:
@@ -406,21 +505,17 @@ def update_product_by_name(sub_category):
         if new_image_url is None:
             return jsonify({"message": "Invalid image type. Allowed: PNG, JPG, WEBP, GIF."}), 400
 
-    rebuild_script  = os.path.join(BASE_DIR, "run_once_import.py")
+    rebuild_script = os.path.join(BASE_DIR, "run_once_import.py")
     forecast_script = os.path.join(BASE_DIR, "save_arima_forecast.py")
 
     conn = db.open_connection()
     try:
-        # Check if a manual_products row already exists for this sub_category
-        existing = db.run_query(conn,
-            "SELECT id, image_url FROM manual_products WHERE sub_category = %s LIMIT 1",
-            (sub_category,))
+        existing = db.run_query(conn, "SELECT id, image_url FROM manual_products WHERE sub_category = %s LIMIT 1", (sub_category,))
 
         if existing:
             row_id = existing[0]["id"]
             keep_image = existing[0].get("image_url") or ""
             final_image = new_image_url if new_image_url else keep_image
-
             db.execute_update(conn, """
                 UPDATE manual_products
                 SET product_name=%s, category=%s, sub_category=%s, sales=%s,
@@ -431,7 +526,6 @@ def update_product_by_name(sub_category):
                   profit, request.form.get("order_date") or None,
                   stock_level, reorder_point, shelf_life_days, final_image, row_id))
         else:
-            # Insert new row for this ml_inventory sub_category
             db.execute_update(conn, """
                 INSERT INTO manual_products (
                     product_name, ship_mode, segment, country, city, state, postal_code,
@@ -443,10 +537,8 @@ def update_product_by_name(sub_category):
                 "Unknown", "Unknown", "00000", "Unknown",
                 category, new_sub, sales, quantity, discount_value, profit,
                 request.form.get("order_date") or None,
-                stock_level, reorder_point, shelf_life_days,
-                new_image_url,
+                stock_level, reorder_point, shelf_life_days, new_image_url,
             ))
-
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -455,116 +547,23 @@ def update_product_by_name(sub_category):
         db.close_connection(conn)
 
     try:
-        subprocess.run([sys.executable, rebuild_script],
-                       check=True, capture_output=True, text=True, cwd=BASE_DIR)
-        subprocess.run([sys.executable, forecast_script],
-                       check=True, capture_output=True, text=True, cwd=BASE_DIR)
+        subprocess.run([sys.executable, rebuild_script], check=True, capture_output=True, text=True, cwd=BASE_DIR)
+        subprocess.run([sys.executable, forecast_script], check=True, capture_output=True, text=True, cwd=BASE_DIR)
     except subprocess.CalledProcessError as e:
-        return jsonify({"message": "Product updated, but rebuild failed.",
-                        "error": e.stderr or e.stdout or str(e)}), 500
+        return jsonify({"message": "Product updated, but rebuild failed.", "error": e.stderr or e.stdout or str(e)}), 500
 
     return jsonify({"message": "Product updated successfully."}), 200
 
 
-# ═══════════════════════════════════════════════════════════════
-# UPDATE PRODUCT BY ID (kept for backward compatibility)
-# ═══════════════════════════════════════════════════════════════
-@app.route("/api/products/<int:product_id>/update", methods=["POST"])
-@login_required
-def update_product(product_id):
-    product_name = (request.form.get("product_name") or "").strip()
-    category     = (request.form.get("category")     or "").strip()
-    sub_category = (request.form.get("sub_category") or "").strip()
-
-    if not product_name or not category or not sub_category:
-        return jsonify({"message": "Product name, category, and sub-category are required."}), 400
-
-    try:
-        sales           = float(request.form.get("sales", 0)           or 0)
-        quantity        = int(request.form.get("quantity", 0)          or 0)
-        discount_input  = float(request.form.get("discount", 0)        or 0)
-        profit          = float(request.form.get("profit", 0)          or 0)
-        stock_level     = int(request.form.get("stock_level", 0)       or 0)
-        reorder_point   = int(request.form.get("reorder_point", 0)     or 0)
-        shelf_life_days = int(request.form.get("shelf_life_days", 365) or 365)
-    except ValueError:
-        return jsonify({"message": "Please enter valid numeric values."}), 400
-
-    if not (0 <= discount_input <= 100):
-        return jsonify({"message": "Discount must be between 0 and 100 percent."}), 400
-
-    discount_value = discount_input / 100.0
-
-    new_image_url = None
-    image_file = request.files.get("image")
-    if image_file and image_file.filename:
-        new_image_url = _save_uploaded_image(image_file)
-        if new_image_url is None:
-            return jsonify({"message": "Invalid image type. Allowed: PNG, JPG, WEBP, GIF."}), 400
-
-    rebuild_script  = os.path.join(BASE_DIR, "run_once_import.py")
-    forecast_script = os.path.join(BASE_DIR, "save_arima_forecast.py")
-
-    conn = db.open_connection()
-    try:
-        existing = db.run_query(conn,
-            "SELECT id FROM manual_products WHERE id = %s", (product_id,))
-        if not existing:
-            return jsonify({"message": "Product not found."}), 404
-
-        if new_image_url:
-            db.execute_update(conn, """
-                UPDATE manual_products
-                SET product_name=%s, category=%s, sub_category=%s, sales=%s,
-                    quantity=%s, discount=%s, profit=%s, order_date=%s,
-                    stock_level=%s, reorder_point=%s, shelf_life_days=%s, image_url=%s
-                WHERE id=%s
-            """, (product_name, category, sub_category, sales, quantity,
-                  discount_value, profit, request.form.get("order_date") or None,
-                  stock_level, reorder_point, shelf_life_days, new_image_url, product_id))
-        else:
-            db.execute_update(conn, """
-                UPDATE manual_products
-                SET product_name=%s, category=%s, sub_category=%s, sales=%s,
-                    quantity=%s, discount=%s, profit=%s, order_date=%s,
-                    stock_level=%s, reorder_point=%s, shelf_life_days=%s
-                WHERE id=%s
-            """, (product_name, category, sub_category, sales, quantity,
-                  discount_value, profit, request.form.get("order_date") or None,
-                  stock_level, reorder_point, shelf_life_days, product_id))
-
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"message": f"Database update failed: {str(e)}"}), 500
-    finally:
-        db.close_connection(conn)
-
-    try:
-        subprocess.run([sys.executable, rebuild_script],
-                       check=True, capture_output=True, text=True, cwd=BASE_DIR)
-        subprocess.run([sys.executable, forecast_script],
-                       check=True, capture_output=True, text=True, cwd=BASE_DIR)
-    except subprocess.CalledProcessError as e:
-        return jsonify({"message": "Product updated, but rebuild failed.",
-                        "error": e.stderr or e.stdout or str(e)}), 500
-
-    return jsonify({"message": "Product updated successfully."}), 200
-
-
-# ═══════════════════════════════════════════════════════════════
-# DELETE PRODUCT
-# ═══════════════════════════════════════════════════════════════
 @app.route("/api/products/<int:product_id>/delete", methods=["POST"])
-@login_required
+@inventory_access_required
 def delete_product(product_id):
-    rebuild_script  = os.path.join(BASE_DIR, "run_once_import.py")
+    rebuild_script = os.path.join(BASE_DIR, "run_once_import.py")
     forecast_script = os.path.join(BASE_DIR, "save_arima_forecast.py")
 
     conn = db.open_connection()
     try:
-        rows = db.run_query(conn,
-            "SELECT id, image_url FROM manual_products WHERE id = %s", (product_id,))
+        rows = db.run_query(conn, "SELECT id, image_url FROM manual_products WHERE id = %s", (product_id,))
         if not rows:
             return jsonify({"message": "Product not found."}), 404
 
@@ -586,348 +585,224 @@ def delete_product(product_id):
             pass
 
     try:
-        subprocess.run([sys.executable, rebuild_script],
-                       check=True, capture_output=True, text=True, cwd=BASE_DIR)
-        subprocess.run([sys.executable, forecast_script],
-                       check=True, capture_output=True, text=True, cwd=BASE_DIR)
+        subprocess.run([sys.executable, rebuild_script], check=True, capture_output=True, text=True, cwd=BASE_DIR)
+        subprocess.run([sys.executable, forecast_script], check=True, capture_output=True, text=True, cwd=BASE_DIR)
     except subprocess.CalledProcessError as e:
-        return jsonify({"message": "Product deleted, but rebuild failed.",
-                        "error": e.stderr or e.stdout or str(e)}), 500
+        return jsonify({"message": "Product deleted, but rebuild failed.", "error": e.stderr or e.stdout or str(e)}), 500
 
     return jsonify({"message": "Product deleted successfully."}), 200
 
 
-# ─── DELETE BY SUB_CATEGORY (for ml_inventory sourced cards) ──
-@app.route("/api/products/by-name/<path:sub_category>/delete", methods=["POST"])
-@login_required
-def delete_product_by_name(sub_category):
-    rebuild_script  = os.path.join(BASE_DIR, "run_once_import.py")
-    forecast_script = os.path.join(BASE_DIR, "save_arima_forecast.py")
+@app.route("/api/products/by-name/<path:sub_category>/restock", methods=["POST"])
+@inventory_access_required
+def restock_product(sub_category):
+    data = request.get_json() or {}
+    try:
+        stock_level = int(data.get("stock_level", 0) or 0)
+        reorder_point = int(data.get("reorder_point", 0) or 0)
+    except ValueError:
+        return jsonify({"message": "Invalid numeric values."}), 400
 
     conn = db.open_connection()
     try:
-        rows = db.run_query(conn,
-            "SELECT id, image_url FROM manual_products WHERE sub_category = %s LIMIT 1",
-            (sub_category,))
-
-        existing_image_url = ""
-        if rows:
-            existing_image_url = rows[0].get("image_url") or ""
-            db.execute_update(conn,
-                "DELETE FROM manual_products WHERE sub_category = %s", (sub_category,))
-            conn.commit()
+        existing = db.run_query(conn, "SELECT id FROM manual_products WHERE sub_category = %s LIMIT 1", (sub_category,))
+        if existing:
+            db.execute_update(conn, "UPDATE manual_products SET stock_level=%s, reorder_point=%s WHERE sub_category=%s", (stock_level, reorder_point, sub_category))
         else:
-            # Nothing in manual_products to delete — that's fine
-            pass
-
+            row = db.run_query(conn, "SELECT MAX(category) AS cat FROM ml_inventory WHERE sub_category = %s LIMIT 1", (sub_category,))
+            cat = row[0]["cat"] if row else "Unknown"
+            db.execute_update(conn, """
+                INSERT INTO manual_products
+                    (product_name, ship_mode, segment, country, city, state,
+                     postal_code, region, category, sub_category,
+                     sales, quantity, discount, profit,
+                     stock_level, reorder_point, shelf_life_days)
+                VALUES (%s,'Standard Class','Consumer','United States',
+                        'Unknown','Unknown','00000','Unknown',
+                        %s, %s, 0, 0, 0, 0, %s, %s, 365)
+            """, (sub_category, cat, sub_category, stock_level, reorder_point))
+        conn.commit()
     except Exception as e:
         conn.rollback()
-        return jsonify({"message": f"Database delete failed: {str(e)}"}), 500
+        return jsonify({"message": f"Restock failed: {str(e)}"}), 500
     finally:
         db.close_connection(conn)
 
-    if existing_image_url and existing_image_url.startswith("/static/images/uploads/"):
-        local_path = os.path.join(BASE_DIR, existing_image_url.lstrip("/"))
-        try:
-            if os.path.exists(local_path):
-                os.remove(local_path)
-        except OSError:
-            pass
+    return jsonify({"message": "Stock updated successfully."}), 200
 
-    try:
-        subprocess.run([sys.executable, rebuild_script],
-                       check=True, capture_output=True, text=True, cwd=BASE_DIR)
-        subprocess.run([sys.executable, forecast_script],
-                       check=True, capture_output=True, text=True, cwd=BASE_DIR)
-    except subprocess.CalledProcessError as e:
-        return jsonify({"message": "Product deleted, but rebuild failed.",
-                        "error": e.stderr or e.stdout or str(e)}), 500
 
-    return jsonify({"message": "Product deleted successfully."}), 200
-
+# ── Alerts ───────────────────────────────────────────────────────────────────
 
 @app.route("/alerts")
 @login_required
 def alerts():
     conn = db.open_connection()
     try:
- 
-        # ── 1. ANOMALY alerts (Isolation Forest) ─────────────────
         anomaly_rows = db.run_query(conn, """
-            SELECT
-                sub_category,
-                region,
-                COUNT(*)                          AS anomaly_count,
-                ROUND(AVG(stock_level), 0)        AS stock_level,
-                ROUND(AVG(reorder_point), 0)      AS reorder_point,
-                ROUND(AVG(days_to_expiry), 0)     AS days_to_expiry,
-                SUM(quantity)                     AS quantity,
-                ROUND(SUM(sales), 2)              AS sales,
-                ROUND(SUM(profit), 2)             AS profit,
-                ROUND(AVG(discount) * 100, 1)     AS avg_discount,
-                ROUND(AVG(profit_margin), 2)      AS profit_margin
-            FROM ml_inventory
-            WHERE is_anomaly = 1
+            SELECT sub_category, region, COUNT(*) AS anomaly_count,
+                   ROUND(AVG(stock_level),0) AS stock_level,
+                   ROUND(AVG(reorder_point),0) AS reorder_point,
+                   ROUND(AVG(days_to_expiry),0) AS days_to_expiry,
+                   SUM(quantity) AS quantity, ROUND(SUM(sales),2) AS sales,
+                   ROUND(SUM(profit),2) AS profit,
+                   ROUND(AVG(discount)*100,1) AS avg_discount,
+                   ROUND(AVG(profit_margin),2) AS profit_margin
+            FROM ml_inventory WHERE is_anomaly=1
             GROUP BY sub_category, region
-            ORDER BY anomaly_count DESC, profit ASC
-            LIMIT 5
+            ORDER BY anomaly_count DESC, profit ASC LIMIT 5
         """)
- 
-        # ── 2. CRITICAL low-stock (≤ 50 % of reorder point) ──────
+
         critical_stock_rows = db.run_query(conn, """
-            SELECT
-                sub_category,
-                region,
-                ROUND(AVG(stock_level), 0)        AS stock_level,
-                ROUND(AVG(reorder_point), 0)      AS reorder_point,
-                ROUND(AVG(days_to_expiry), 0)     AS days_to_expiry,
-                SUM(quantity)                     AS quantity,
-                ROUND(SUM(sales), 2)              AS sales,
-                ROUND(SUM(profit), 2)             AS profit,
-                ROUND(AVG(discount) * 100, 1)     AS avg_discount
+            SELECT sub_category, region,
+                   ROUND(AVG(stock_level),0) AS stock_level,
+                   ROUND(AVG(reorder_point),0) AS reorder_point,
+                   ROUND(AVG(days_to_expiry),0) AS days_to_expiry,
+                   SUM(quantity) AS quantity, ROUND(SUM(sales),2) AS sales,
+                   ROUND(SUM(profit),2) AS profit,
+                   ROUND(AVG(discount)*100,1) AS avg_discount
             FROM ml_inventory
-            WHERE low_stock = 1
-              AND stock_level <= reorder_point * 0.5
-              AND is_anomaly = 0
-            GROUP BY sub_category, region
-            ORDER BY stock_level ASC
-            LIMIT 5
+            WHERE low_stock=1 AND stock_level<=reorder_point*0.5 AND is_anomaly=0
+            GROUP BY sub_category, region ORDER BY stock_level ASC LIMIT 5
         """)
- 
-        # ── 3. CRITICAL near-expiry (≤ 7 days) ───────────────────
+
         critical_expiry_rows = db.run_query(conn, """
-            SELECT
-                sub_category,
-                region,
-                ROUND(AVG(stock_level), 0)        AS stock_level,
-                ROUND(AVG(reorder_point), 0)      AS reorder_point,
-                ROUND(MIN(days_to_expiry), 0)     AS days_to_expiry,
-                SUM(quantity)                     AS quantity,
-                ROUND(SUM(sales), 2)              AS sales,
-                ROUND(SUM(profit), 2)             AS profit,
-                ROUND(AVG(discount) * 100, 1)     AS avg_discount
+            SELECT sub_category, region,
+                   ROUND(AVG(stock_level),0) AS stock_level,
+                   ROUND(AVG(reorder_point),0) AS reorder_point,
+                   ROUND(MIN(days_to_expiry),0) AS days_to_expiry,
+                   SUM(quantity) AS quantity, ROUND(SUM(sales),2) AS sales,
+                   ROUND(SUM(profit),2) AS profit,
+                   ROUND(AVG(discount)*100,1) AS avg_discount
             FROM ml_inventory
-            WHERE near_expiry = 1
-              AND days_to_expiry <= 7
-              AND is_anomaly = 0
-            GROUP BY sub_category, region
-            ORDER BY days_to_expiry ASC
-            LIMIT 5
+            WHERE near_expiry=1 AND days_to_expiry<=7 AND is_anomaly=0
+            GROUP BY sub_category, region ORDER BY days_to_expiry ASC LIMIT 5
         """)
- 
-        # ── 4. WARNING low-stock (above 50 % but still flagged) ──
+
         warning_stock_rows = db.run_query(conn, """
-            SELECT
-                sub_category,
-                region,
-                ROUND(AVG(stock_level), 0)        AS stock_level,
-                ROUND(AVG(reorder_point), 0)      AS reorder_point,
-                ROUND(AVG(days_to_expiry), 0)     AS days_to_expiry,
-                SUM(quantity)                     AS quantity,
-                ROUND(SUM(sales), 2)              AS sales,
-                ROUND(SUM(profit), 2)             AS profit,
-                ROUND(AVG(discount) * 100, 1)     AS avg_discount
+            SELECT sub_category, region,
+                   ROUND(AVG(stock_level),0) AS stock_level,
+                   ROUND(AVG(reorder_point),0) AS reorder_point,
+                   ROUND(AVG(days_to_expiry),0) AS days_to_expiry,
+                   SUM(quantity) AS quantity, ROUND(SUM(sales),2) AS sales,
+                   ROUND(SUM(profit),2) AS profit,
+                   ROUND(AVG(discount)*100,1) AS avg_discount
             FROM ml_inventory
-            WHERE low_stock = 1
-              AND stock_level > reorder_point * 0.5
-              AND is_anomaly = 0
-            GROUP BY sub_category, region
-            ORDER BY stock_level ASC
-            LIMIT 5
+            WHERE low_stock=1 AND stock_level>reorder_point*0.5 AND is_anomaly=0
+            GROUP BY sub_category, region ORDER BY stock_level ASC LIMIT 5
         """)
- 
-        # ── 5. WARNING near-expiry (8 – 30 days) ─────────────────
+
         warning_expiry_rows = db.run_query(conn, """
-            SELECT
-                sub_category,
-                region,
-                ROUND(AVG(stock_level), 0)        AS stock_level,
-                ROUND(AVG(reorder_point), 0)      AS reorder_point,
-                ROUND(MIN(days_to_expiry), 0)     AS days_to_expiry,
-                SUM(quantity)                     AS quantity,
-                ROUND(SUM(sales), 2)              AS sales,
-                ROUND(SUM(profit), 2)             AS profit,
-                ROUND(AVG(discount) * 100, 1)     AS avg_discount
+            SELECT sub_category, region,
+                   ROUND(AVG(stock_level),0) AS stock_level,
+                   ROUND(AVG(reorder_point),0) AS reorder_point,
+                   ROUND(MIN(days_to_expiry),0) AS days_to_expiry,
+                   SUM(quantity) AS quantity, ROUND(SUM(sales),2) AS sales,
+                   ROUND(SUM(profit),2) AS profit,
+                   ROUND(AVG(discount)*100,1) AS avg_discount
             FROM ml_inventory
-            WHERE near_expiry = 1
-              AND days_to_expiry > 7
-              AND is_anomaly = 0
-            GROUP BY sub_category, region
-            ORDER BY days_to_expiry ASC
-            LIMIT 5
+            WHERE near_expiry=1 AND days_to_expiry>7 AND is_anomaly=0
+            GROUP BY sub_category, region ORDER BY days_to_expiry ASC LIMIT 5
         """)
- 
-        # ── 6. ML INSIGHTS — top-demand categories ───────────────
+
         ml_rows = db.run_query(conn, """
-            SELECT
-                sub_category,
-                SUM(quantity)                     AS total_quantity,
-                ROUND(SUM(sales), 2)              AS total_sales,
-                ROUND(AVG(profit_margin), 2)      AS avg_margin
-            FROM ml_inventory
-            GROUP BY sub_category
-            ORDER BY total_quantity DESC
-            LIMIT 4
+            SELECT sub_category, SUM(quantity) AS total_quantity,
+                   ROUND(SUM(sales),2) AS total_sales,
+                   ROUND(AVG(profit_margin),2) AS avg_margin
+            FROM ml_inventory GROUP BY sub_category ORDER BY total_quantity DESC LIMIT 4
         """)
- 
-        # ── Build unified alerts_data list ────────────────────────
+
         alerts_data = []
- 
-        # — Anomaly cards
+
         for row in anomaly_rows:
             alerts_data.append({
-                "type":          "critical",
-                "icon":          "⛔",
-                "title":         "Anomaly Detected – Isolation Forest",
-                "subtitle":      f"{row['sub_category']}  ·  {row['region'] or ''}",
-                "message":       (
-                    f"{row['sub_category']} was flagged {int(row['anomaly_count'])} time(s) by the "
-                    f"Isolation Forest model (5 % contamination). Unusual discount-to-profit pattern "
-                    f"detected — review pricing and supplier terms immediately."
-                ),
-                "action":        "Investigate",
-                "time":          "Just now",
-                "region":        row["region"],
-                "stock_level":   row["stock_level"],
-                "reorder_point": row["reorder_point"],
-                "days_to_expiry":row["days_to_expiry"],
-                "quantity":      row["quantity"],
-                "sales":         row["sales"],
-                "profit":        row["profit"],
-                "avg_discount":  row["avg_discount"],
-                "anomaly_count": row["anomaly_count"],
+                "type": "critical", "icon": "⛔",
+                "title": "Anomaly Detected – Isolation Forest",
+                "subtitle": f"{row['sub_category']}  ·  {row['region'] or ''}",
+                "message": (f"{row['sub_category']} was flagged {int(row['anomaly_count'])} time(s) by the "
+                            f"Isolation Forest model. Unusual discount-to-profit pattern detected — review pricing and supplier terms immediately."),
+                "action": "Investigate", "time": "Just now",
+                "region": row["region"], "stock_level": row["stock_level"],
+                "reorder_point": row["reorder_point"], "days_to_expiry": row["days_to_expiry"],
+                "quantity": row["quantity"], "sales": row["sales"], "profit": row["profit"],
+                "avg_discount": row["avg_discount"], "anomaly_count": row["anomaly_count"],
                 "profit_margin": row["profit_margin"],
             })
- 
-        # — Critical low-stock cards
+
         for row in critical_stock_rows:
             deficit = max(0, int(row["reorder_point"] or 0) - int(row["stock_level"] or 0))
             alerts_data.append({
-                "type":          "critical",
-                "icon":          "📦",
-                "title":         "Critical Stock Level",
-                "subtitle":      f"{row['sub_category']}  ·  {row['region'] or ''}",
-                "message":       (
-                    f"{row['sub_category']} has only {int(row['stock_level'])} units remaining — "
-                    f"{int(round((int(row['stock_level']) / max(int(row['reorder_point']), 1)) * 100))}% "
-                    f"of the reorder threshold ({int(row['reorder_point'])}). "
-                    f"Order at least {deficit} units immediately to avoid stockout."
-                ),
-                "action":        "Reorder Now",
-                "time":          "Recently",
-                "region":        row["region"],
-                "stock_level":   row["stock_level"],
-                "reorder_point": row["reorder_point"],
-                "days_to_expiry":row["days_to_expiry"],
-                "quantity":      row["quantity"],
-                "sales":         row["sales"],
-                "profit":        row["profit"],
-                "avg_discount":  row["avg_discount"],
+                "type": "critical", "icon": "📦",
+                "title": "Critical Stock Level",
+                "subtitle": f"{row['sub_category']}  ·  {row['region'] or ''}",
+                "message": (f"{row['sub_category']} has only {int(row['stock_level'])} units remaining. "
+                            f"Order at least {deficit} units immediately to avoid stockout."),
+                "action": "Reorder Now", "time": "Recently",
+                "region": row["region"], "stock_level": row["stock_level"],
+                "reorder_point": row["reorder_point"], "days_to_expiry": row["days_to_expiry"],
+                "quantity": row["quantity"], "sales": row["sales"], "profit": row["profit"],
+                "avg_discount": row["avg_discount"],
             })
- 
-        # — Critical near-expiry cards
+
         for row in critical_expiry_rows:
             alerts_data.append({
-                "type":          "critical",
-                "icon":          "🗓️",
-                "title":         "Urgent – Expiry Within 7 Days",
-                "subtitle":      f"{row['sub_category']}  ·  {row['region'] or ''}",
-                "message":       (
-                    f"{row['sub_category']} expires in {int(row['days_to_expiry'])} day(s). "
-                    f"{int(row['quantity'])} units at risk (≈ ${float(row['sales']):.0f} in revenue). "
-                    f"Consider flash discount or redistribution to minimise losses."
-                ),
-                "action":        "Apply Discount",
-                "time":          "Urgent",
-                "region":        row["region"],
-                "stock_level":   row["stock_level"],
-                "reorder_point": row["reorder_point"],
-                "days_to_expiry":row["days_to_expiry"],
-                "quantity":      row["quantity"],
-                "sales":         row["sales"],
-                "profit":        row["profit"],
-                "avg_discount":  row["avg_discount"],
+                "type": "critical", "icon": "🗓️",
+                "title": "Urgent – Expiry Within 7 Days",
+                "subtitle": f"{row['sub_category']}  ·  {row['region'] or ''}",
+                "message": (f"{row['sub_category']} expires in {int(row['days_to_expiry'])} day(s). "
+                            f"{int(row['quantity'])} units at risk. Consider flash discount or redistribution."),
+                "action": "Apply Discount", "time": "Urgent",
+                "region": row["region"], "stock_level": row["stock_level"],
+                "reorder_point": row["reorder_point"], "days_to_expiry": row["days_to_expiry"],
+                "quantity": row["quantity"], "sales": row["sales"], "profit": row["profit"],
+                "avg_discount": row["avg_discount"],
             })
- 
-        # — Warning low-stock cards
+
         for row in warning_stock_rows:
             alerts_data.append({
-                "type":          "warning",
-                "icon":          "⚠️",
-                "title":         "Low Stock Alert",
-                "subtitle":      f"{row['sub_category']}  ·  {row['region'] or ''}",
-                "message":       (
-                    f"{row['sub_category']} stock ({int(row['stock_level'])} units) is below the "
-                    f"reorder point of {int(row['reorder_point'])} units. "
-                    f"Plan a replenishment order to avoid disruption."
-                ),
-                "action":        "Plan Reorder",
-                "time":          "Today",
-                "region":        row["region"],
-                "stock_level":   row["stock_level"],
-                "reorder_point": row["reorder_point"],
-                "days_to_expiry":row["days_to_expiry"],
-                "quantity":      row["quantity"],
-                "sales":         row["sales"],
-                "profit":        row["profit"],
-                "avg_discount":  row["avg_discount"],
+                "type": "warning", "icon": "⚠️",
+                "title": "Low Stock Alert",
+                "subtitle": f"{row['sub_category']}  ·  {row['region'] or ''}",
+                "message": (f"{row['sub_category']} stock ({int(row['stock_level'])} units) is below the reorder point of {int(row['reorder_point'])} units."),
+                "action": "Plan Reorder", "time": "Today",
+                "region": row["region"], "stock_level": row["stock_level"],
+                "reorder_point": row["reorder_point"], "days_to_expiry": row["days_to_expiry"],
+                "quantity": row["quantity"], "sales": row["sales"], "profit": row["profit"],
+                "avg_discount": row["avg_discount"],
             })
- 
-        # — Warning near-expiry cards
+
         for row in warning_expiry_rows:
             alerts_data.append({
-                "type":          "warning",
-                "icon":          "⚠️",
-                "title":         "Near Expiry Warning",
-                "subtitle":      f"{row['sub_category']}  ·  {row['region'] or ''}",
-                "message":       (
-                    f"{row['sub_category']} will expire in {int(row['days_to_expiry'])} days. "
-                    f"Current stock: {int(row['stock_level'])} units across {int(row['quantity'])} orders. "
-                    f"Review pricing or schedule clearance promotion."
-                ),
-                "action":        "Review Item",
-                "time":          "This week",
-                "region":        row["region"],
-                "stock_level":   row["stock_level"],
-                "reorder_point": row["reorder_point"],
-                "days_to_expiry":row["days_to_expiry"],
-                "quantity":      row["quantity"],
-                "sales":         row["sales"],
-                "profit":        row["profit"],
-                "avg_discount":  row["avg_discount"],
+                "type": "warning", "icon": "⚠️",
+                "title": "Near Expiry Warning",
+                "subtitle": f"{row['sub_category']}  ·  {row['region'] or ''}",
+                "message": (f"{row['sub_category']} will expire in {int(row['days_to_expiry'])} days. Review pricing or schedule clearance promotion."),
+                "action": "Review Item", "time": "This week",
+                "region": row["region"], "stock_level": row["stock_level"],
+                "reorder_point": row["reorder_point"], "days_to_expiry": row["days_to_expiry"],
+                "quantity": row["quantity"], "sales": row["sales"], "profit": row["profit"],
+                "avg_discount": row["avg_discount"],
             })
- 
-        # — ML insight cards
+
         for row in ml_rows:
             alerts_data.append({
-                "type":           "ml",
-                "icon":           "🤖",
-                "title":          "AI Demand Forecast",
-                "subtitle":       f"High-demand category: {row['sub_category']}",
-                "message":        (
-                    f"Random Forest model predicts continued high demand for {row['sub_category']}. "
-                    f"{int(row['total_quantity'])} units sold, generating "
-                    f"${float(row['total_sales']):.0f} in revenue at "
-                    f"{float(row['avg_margin']):.1f}% avg margin. "
-                    f"Ensure sufficient stock to capitalise on demand."
-                ),
-                "action":         "View Forecast",
-                "time":           "Today",
-                "region":         None,
-                "total_quantity": row["total_quantity"],
-                "total_sales":    row["total_sales"],
-                "avg_margin":     row["avg_margin"],
+                "type": "ml", "icon": "🤖",
+                "title": "AI Demand Forecast",
+                "subtitle": f"High-demand category: {row['sub_category']}",
+                "message": (f"Predicted sustained demand for {row['sub_category']}. "
+                            f"{int(row['total_quantity'])} units sold with ${float(row['total_sales']):.0f} revenue at {float(row['avg_margin']):.1f}% average margin."),
+                "action": "View Forecast", "time": "Today",
+                "region": None, "total_quantity": row["total_quantity"],
+                "total_sales": row["total_sales"], "avg_margin": row["avg_margin"],
             })
- 
-        # ── Tab counts ────────────────────────────────────────────
+
         counts = {
-            "all":      len(alerts_data),
+            "all": len(alerts_data),
             "critical": sum(1 for a in alerts_data if a["type"] == "critical"),
-            "warning":  sum(1 for a in alerts_data if a["type"] == "warning"),
-            "info":     sum(1 for a in alerts_data if a["type"] == "info"),
-            "ml":       sum(1 for a in alerts_data if a["type"] == "ml"),
+            "warning": sum(1 for a in alerts_data if a["type"] == "warning"),
+            "info": sum(1 for a in alerts_data if a["type"] == "info"),
+            "ml": sum(1 for a in alerts_data if a["type"] == "ml"),
         }
- 
+
         return render_template(
             "alert.html",
             active_page="alerts",
@@ -936,16 +811,22 @@ def alerts():
             alerts_data=alerts_data,
             counts=counts,
         )
- 
     finally:
         db.close_connection(conn)
+
 
 @app.route("/analytics")
 @login_required
 def analytic():
-    return render_template("analytic.html", active_page="analytic",
-                           user_name=session.get("user_name"), user_role=session.get("role"))
+    return render_template(
+        "analytic.html",
+        active_page="analytic",
+        user_name=session.get("user_name"),
+        user_role=session.get("role"),
+    )
 
+
+# ── Admin — user management ──────────────────────────────────────────────────
 
 @app.route("/admin/users")
 @admin_required
@@ -953,8 +834,7 @@ def admin_users():
     conn = db.open_connection()
     try:
         users = db.run_query(conn, "SELECT id, full_name, email, role, created_at FROM users ORDER BY created_at DESC")
-        return render_template("admin_users.html", users=users, active_page="admin_users",
-                               user_name=session.get("user_name"), user_role=session.get("role"))
+        return render_template("admin_users.html", users=users, active_page="admin_users", user_name=session.get("user_name"), user_role=session.get("role"))
     finally:
         db.close_connection(conn)
 
@@ -962,8 +842,7 @@ def admin_users():
 @app.route("/admin/users/create")
 @admin_required
 def admin_create_user_page():
-    return render_template("admin_create_user.html", active_page="admin_create_user",
-                           user_name=session.get("user_name"), user_role=session.get("role"))
+    return render_template("admin_create_user.html", active_page="admin_create_user", user_name=session.get("user_name"), user_role=session.get("role"))
 
 
 @app.route("/api/admin/users", methods=["POST"])
@@ -971,15 +850,15 @@ def admin_create_user_page():
 def admin_create_user():
     data = request.get_json() or {}
     full_name = (data.get("full_name") or "").strip()
-    email     = (data.get("email")     or "").strip().lower()
-    password  = (data.get("password")  or "").strip()
-    role      = (data.get("role")      or "staff").strip().lower()
+    email = (data.get("email") or "").strip().lower()
+    password = (data.get("password") or "").strip()
+    role = (data.get("role") or "staff").strip().lower()
 
     if len(full_name.split()) < 2:
         return jsonify({"message": "Full name must contain at least 2 words."}), 400
     if not email:
         return jsonify({"message": "Email is required."}), 400
-    if role not in ["admin", "staff"]:
+    if role not in VALID_ROLES:
         return jsonify({"message": "Invalid role selected."}), 400
     if len(password) < 8:
         return jsonify({"message": "Password must be at least 8 characters long."}), 400
@@ -994,9 +873,7 @@ def admin_create_user():
     try:
         if db.run_query(conn, "SELECT id FROM users WHERE email = %s", (email,)):
             return jsonify({"message": "Email already exists."}), 409
-        db.execute_update(conn,
-            "INSERT INTO users (full_name, email, password_hash, role) VALUES (%s,%s,%s,%s)",
-            (full_name, email, generate_password_hash(password), role))
+        db.execute_update(conn, "INSERT INTO users (full_name, email, password_hash, role) VALUES (%s,%s,%s,%s)", (full_name, email, generate_password_hash(password), role))
         return jsonify({"message": "User created successfully."}), 201
     finally:
         db.close_connection(conn)
@@ -1015,24 +892,18 @@ def admin_delete_user(user_id):
         db.close_connection(conn)
 
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
-
-
 @app.route("/api/admin/users/<int:user_id>/update", methods=["POST"])
 @admin_required
 def admin_update_user(user_id):
     data = request.get_json() or {}
     full_name = (data.get("full_name") or "").strip()
-    email     = (data.get("email")     or "").strip().lower()
-    password  = (data.get("password")  or "").strip()
-    role      = (data.get("role")      or "staff").strip().lower()
+    email = (data.get("email") or "").strip().lower()
+    password = (data.get("password") or "").strip()
+    role = (data.get("role") or "staff").strip().lower()
 
     if not full_name or not email:
         return jsonify({"message": "Name and email are required."}), 400
-    if role not in ["admin", "staff"]:
+    if role not in VALID_ROLES:
         return jsonify({"message": "Invalid role."}), 400
 
     conn = db.open_connection()
@@ -1040,21 +911,12 @@ def admin_update_user(user_id):
         if db.run_query(conn, "SELECT id FROM users WHERE email=%s AND id!=%s", (email, user_id)):
             return jsonify({"message": "Email already used by another user."}), 409
         if password:
-            db.execute_update(conn,
-                "UPDATE users SET full_name=%s, email=%s, password_hash=%s, role=%s WHERE id=%s",
-                (full_name, email, generate_password_hash(password), role, user_id))
+            db.execute_update(conn, "UPDATE users SET full_name=%s, email=%s, password_hash=%s, role=%s WHERE id=%s", (full_name, email, generate_password_hash(password), role, user_id))
         else:
-            db.execute_update(conn,
-                "UPDATE users SET full_name=%s, email=%s, role=%s WHERE id=%s",
-                (full_name, email, role, user_id))
+            db.execute_update(conn, "UPDATE users SET full_name=%s, email=%s, role=%s WHERE id=%s", (full_name, email, role, user_id))
         return jsonify({"message": "User updated successfully."}), 200
     finally:
         db.close_connection(conn)
-
-
-@app.route("/signup")
-def signup_page():
-    return redirect(url_for("login"))
 
 
 @app.route("/admin/users/edit/<int:user_id>")
@@ -1062,44 +924,55 @@ def signup_page():
 def admin_edit_user_page(user_id):
     conn = db.open_connection()
     try:
-        rows = db.run_query(conn,
-            "SELECT id, full_name, email, role FROM users WHERE id=%s LIMIT 1", (user_id,))
+        rows = db.run_query(conn, "SELECT id, full_name, email, role FROM users WHERE id=%s LIMIT 1", (user_id,))
         if not rows:
             return redirect(url_for("admin_users"))
-        return render_template("admin_edit_user.html", user=rows[0], active_page="admin_users",
-                               user_name=session.get("user_name"), user_role=session.get("role"))
+        return render_template("admin_edit_user.html", user=rows[0], active_page="admin_users", user_name=session.get("user_name"), user_role=session.get("role"))
     finally:
         db.close_connection(conn)
+
+
+# ── Auth ─────────────────────────────────────────────────────────────────────
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/signup")
+def signup_page():
+    return redirect(url_for("login"))
 
 
 @app.route("/api/login", methods=["POST"])
 def api_login():
     data = request.get_json() or {}
-    email    = (data.get("email")    or "").strip().lower()
-    password =  data.get("password") or ""
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
 
     if not email or not password:
         return jsonify({"message": "Email and password required"}), 400
 
     conn = db.open_connection()
     try:
-        rows = db.run_query(conn,
-            "SELECT id, full_name, email, password_hash, role FROM users WHERE email=%s LIMIT 1",
-            (email,))
+        rows = db.run_query(conn, "SELECT id, full_name, email, password_hash, role FROM users WHERE email=%s LIMIT 1", (email,))
         if not rows:
             return jsonify({"message": "Invalid email or password"}), 401
         user = rows[0]
         if not check_password_hash(user["password_hash"], password):
             return jsonify({"message": "Invalid email or password"}), 401
 
-        session["user_id"]    = user["id"]
-        session["user_name"]  = user["full_name"]
+        session["user_id"] = user["id"]
+        session["user_name"] = user["full_name"]
         session["user_email"] = user["email"]
-        session["role"]       = user["role"]
+        session["role"] = user["role"]
         return jsonify({"message": "Login success", "role": user["role"], "redirect": "/dashboard"}), 200
     finally:
         db.close_connection(conn)
 
+
+# ── Dashboard & analytics API ────────────────────────────────────────────────
 
 @app.route("/api/dashboard/stats")
 @login_required
@@ -1116,12 +989,12 @@ def dashboard_stats():
         """)[0]
         return jsonify({
             "total_products": int(row["total_products"] or 0),
-            "total_records":  int(row["total_records"]  or 0),
-            "low_stock":      int(row["low_stock_count"]    or 0),
-            "near_expiry":    int(row["near_expiry_count"]  or 0),
-            "anomaly_count":  int(row["anomaly_count"]      or 0),
-            "total_sales":    float(row["total_sales"]      or 0),
-            "avg_order_value":float(row["avg_order_value"]  or 0),
+            "total_records": int(row["total_records"] or 0),
+            "low_stock": int(row["low_stock_count"] or 0),
+            "near_expiry": int(row["near_expiry_count"] or 0),
+            "anomaly_count": int(row["anomaly_count"] or 0),
+            "total_sales": float(row["total_sales"] or 0),
+            "avg_order_value": float(row["avg_order_value"] or 0),
         })
     finally:
         db.close_connection(conn)
@@ -1140,15 +1013,14 @@ def sales_trend():
         """)
         forecast = []
         try:
-            forecast = db.run_query(conn,
-                "SELECT label, forecast_amount AS total FROM arima_forecast ORDER BY forecast_month")
+            forecast = db.run_query(conn, "SELECT label, forecast_amount AS total FROM arima_forecast ORDER BY forecast_month")
         except Exception:
             pass
         return jsonify({
-            "labels":          [r["label"]       for r in actual],
-            "actual":          [float(r["total"]) for r in actual],
-            "forecast":        [float(r["total"]) for r in forecast] if forecast else [],
-            "forecast_labels": [r["label"]        for r in forecast] if forecast else [],
+            "labels": [r["label"] for r in actual],
+            "actual": [float(r["total"]) for r in actual],
+            "forecast": [float(r["total"]) for r in forecast] if forecast else [],
+            "forecast_labels": [r["label"] for r in forecast] if forecast else [],
         })
     finally:
         db.close_connection(conn)
@@ -1165,10 +1037,10 @@ def top_products():
             FROM ml_inventory GROUP BY sub_category ORDER BY total_qty DESC LIMIT 8
         """)
         return jsonify({
-            "labels":  [r["sub_category"]      for r in rows],
-            "values":  [int(r["total_qty"])     for r in rows],
-            "sales":   [float(r["total_sales"]) for r in rows],
-            "margins": [float(r["avg_margin"])  for r in rows],
+            "labels": [r["sub_category"] for r in rows],
+            "values": [int(r["total_qty"]) for r in rows],
+            "sales": [float(r["total_sales"]) for r in rows],
+            "margins": [float(r["avg_margin"]) for r in rows],
         })
     finally:
         db.close_connection(conn)
@@ -1185,12 +1057,11 @@ def anomaly_summary():
             FROM ml_inventory WHERE is_anomaly=1
             GROUP BY sub_category ORDER BY anomaly_count DESC LIMIT 10
         """)
-        total = db.run_query(conn,
-            "SELECT SUM(is_anomaly) AS total_anomalies, COUNT(*) AS total_rows FROM ml_inventory")[0]
+        total = db.run_query(conn, "SELECT SUM(is_anomaly) AS total_anomalies, COUNT(*) AS total_rows FROM ml_inventory")[0]
         return jsonify({
-            "breakdown":       rows,
+            "breakdown": rows,
             "total_anomalies": int(total["total_anomalies"] or 0),
-            "total_rows":      int(total["total_rows"]      or 0),
+            "total_rows": int(total["total_rows"] or 0),
         })
     finally:
         db.close_connection(conn)
@@ -1225,211 +1096,415 @@ def recent_alerts():
     finally:
         db.close_connection(conn)
 
+
 @app.route("/api/dashboard/margin_by_category")
 @login_required
 def margin_by_category():
     conn = db.open_connection()
     try:
         rows = db.run_query(conn, """
-            SELECT
-                sub_category,
-                -- NULLIF prevents division-by-zero; COALESCE turns NULL → 0.0
-                COALESCE(
-                    ROUND(SUM(profit) / NULLIF(SUM(sales), 0) * 100, 2),
-                    0.0
-                ) AS margin_pct,
-                ROUND(SUM(profit), 2) AS total_profit,
-                ROUND(SUM(sales),  2) AS total_sales
-            FROM ml_inventory
-            GROUP BY sub_category
-            ORDER BY margin_pct ASC
+            SELECT sub_category,
+                   COALESCE(ROUND(SUM(profit)/NULLIF(SUM(sales),0)*100,2), 0.0) AS margin_pct,
+                   ROUND(SUM(profit),2) AS total_profit,
+                   ROUND(SUM(sales),2) AS total_sales
+            FROM ml_inventory GROUP BY sub_category ORDER BY margin_pct ASC
         """)
         return jsonify({
-            "labels":  [r["sub_category"]              for r in rows],
-            # Safely cast — value is already guaranteed non-NULL by COALESCE
-            "margins": [float(r["margin_pct"]  or 0)   for r in rows],
-            "profits": [float(r["total_profit"] or 0)  for r in rows],
+            "labels": [r["sub_category"] for r in rows],
+            "margins": [float(r["margin_pct"] or 0) for r in rows],
+            "profits": [float(r["total_profit"] or 0) for r in rows],
         })
     finally:
         db.close_connection(conn)
 
 
- 
+@app.route("/api/inventory_manager/kpis")
+@login_required
+def inventory_manager_kpis():
+    if session.get("role") not in ("admin", "inventory_manager"):
+        return jsonify({"message": "Forbidden"}), 403
+
+    conn = db.open_connection()
+    try:
+        stock_summary = db.run_query(conn, """
+            SELECT
+                COUNT(DISTINCT sub_category) AS total_skus,
+                SUM(CASE WHEN low_stock=1 THEN 1 ELSE 0 END) AS low_stock_skus,
+                SUM(CASE WHEN near_expiry=1 THEN 1 ELSE 0 END) AS near_expiry_skus,
+                SUM(CASE WHEN is_anomaly=1 THEN 1 ELSE 0 END) AS anomaly_skus,
+                ROUND(AVG(stock_level),0) AS avg_stock,
+                ROUND(SUM(quantity),0) AS total_units
+            FROM ml_inventory
+        """)[0]
+
+        top_restock = db.run_query(conn, """
+            SELECT sub_category, region,
+                   ROUND(AVG(stock_level),0) AS stock_level,
+                   ROUND(AVG(reorder_point),0) AS reorder_point,
+                   ROUND(AVG(days_to_expiry),0) AS days_to_expiry,
+                   SUM(quantity) AS quantity
+            FROM ml_inventory
+            WHERE low_stock=1
+            GROUP BY sub_category, region
+            ORDER BY stock_level ASC
+            LIMIT 8
+        """)
+
+        category_health = db.run_query(conn, """
+            SELECT category,
+                   COUNT(DISTINCT sub_category) AS skus,
+                   SUM(CASE WHEN low_stock=1 THEN 1 ELSE 0 END) AS low,
+                   SUM(CASE WHEN near_expiry=1 THEN 1 ELSE 0 END) AS expiring,
+                   ROUND(AVG(stock_level),0) AS avg_stock
+            FROM ml_inventory
+            GROUP BY category ORDER BY low DESC
+        """)
+
+        return jsonify({
+            "summary": {
+                "total_skus": int(stock_summary["total_skus"] or 0),
+                "low_stock_skus": int(stock_summary["low_stock_skus"] or 0),
+                "near_expiry_skus": int(stock_summary["near_expiry_skus"] or 0),
+                "anomaly_skus": int(stock_summary["anomaly_skus"] or 0),
+                "avg_stock": float(stock_summary["avg_stock"] or 0),
+                "total_units": int(stock_summary["total_units"] or 0),
+            },
+            "top_restock": top_restock,
+            "category_health": category_health,
+        })
+    finally:
+        db.close_connection(conn)
+
+
+# ── Real-time alert endpoints ────────────────────────────────────────────────
+
 @app.route("/api/alerts/live")
 @login_required
 def alerts_live():
-    """
-    Return JSON list of real-time alerts derived directly from
-    manual_products (no ML pipeline needed).  The frontend polls
-    this every 30 s and shows toast notifications for new items.
-    """
     conn = db.open_connection()
     try:
         rows = db.run_query(conn, """
-            SELECT
-                id,
-                product_name,
-                sub_category,
-                category,
-                stock_level,
-                reorder_point,
-                shelf_life_days          AS days_to_expiry,
-                sales,
-                quantity,
-                profit,
-                ROUND(discount * 100, 1) AS avg_discount,
-                order_date,
-                region,
-                state
+            SELECT id, product_name, sub_category, category,
+                   stock_level, reorder_point,
+                   shelf_life_days AS days_to_expiry,
+                   sales, quantity, profit,
+                   ROUND(discount*100,1) AS avg_discount,
+                   order_date, region, state
             FROM manual_products
-            WHERE
-                (stock_level IS NOT NULL AND reorder_point IS NOT NULL
-                    AND stock_level < reorder_point)
-                OR
-                (shelf_life_days IS NOT NULL AND shelf_life_days <= 30)
+            WHERE (stock_level IS NOT NULL AND reorder_point IS NOT NULL AND stock_level < reorder_point)
+               OR (shelf_life_days IS NOT NULL AND shelf_life_days <= 30)
             ORDER BY
-                CASE
-                    WHEN stock_level < reorder_point * 0.5 THEN 0   -- critical low stock
-                    WHEN shelf_life_days <= 7              THEN 1   -- critical expiry
-                    WHEN shelf_life_days <= 30             THEN 2   -- warning expiry
-                    ELSE 3                                           -- warning low stock
-                END,
+                CASE WHEN stock_level < reorder_point*0.5 THEN 0
+                     WHEN shelf_life_days <= 7 THEN 1
+                     WHEN shelf_life_days <= 30 THEN 2
+                     ELSE 3 END,
                 stock_level ASC
         """)
- 
+
         alerts = []
         for r in rows:
-            sl   = int(r["stock_level"]   or 0)
-            rp   = int(r["reorder_point"] or 0)
-            dte  = int(r["days_to_expiry"] or 9999)
+            sl = int(r["stock_level"] or 0)
+            rp = int(r["reorder_point"] or 0)
+            dte = int(r["days_to_expiry"] or 9999)
             name = r["sub_category"] or r["product_name"] or "Unknown"
- 
-            # ── Determine severity & message ──────────────────────
+
             if sl < rp and sl <= rp * 0.5:
-                alert_type = "critical"
-                title      = "Critical Stock Level"
-                icon       = "📦"
-                deficit    = max(0, rp - sl)
-                pct        = round((sl / max(rp, 1)) * 100)
-                message    = (
-                    f"{name} has only {sl} units — {pct}% of the reorder threshold "
-                    f"({rp}). Order at least {deficit} units immediately."
-                )
+                alert_type = "critical"; title = "Critical Stock Level"; icon = "📦"
+                deficit = max(0, rp - sl)
+                pct = round((sl / max(rp, 1)) * 100)
+                message = f"{name} has only {sl} units — {pct}% of the reorder threshold ({rp}). Order at least {deficit} units immediately."
                 action = "Reorder Now"
- 
             elif dte <= 7:
-                alert_type = "critical"
-                title      = "Urgent — Expiry Within 7 Days"
-                icon       = "🗓️"
-                message    = (
-                    f"{name} expires in {dte} day(s). "
-                    f"{int(r['quantity'] or 0)} units at risk "
-                    f"(≈ ${float(r['sales'] or 0):.0f} in revenue). "
-                    f"Consider flash discount or redistribution."
-                )
+                alert_type = "critical"; title = "Urgent — Expiry Within 7 Days"; icon = "🗓️"
+                message = f"{name} expires in {dte} day(s). {int(r['quantity'] or 0)} units at risk. Consider flash discount or redistribution."
                 action = "Apply Discount"
- 
             elif dte <= 30:
-                alert_type = "warning"
-                title      = "Near Expiry Warning"
-                icon       = "⚠️"
-                message    = (
-                    f"{name} will expire in {dte} days. "
-                    f"Stock: {sl} units across {int(r['quantity'] or 0)} orders. "
-                    f"Review pricing or schedule clearance promotion."
-                )
+                alert_type = "warning"; title = "Near Expiry Warning"; icon = "⚠️"
+                message = f"{name} will expire in {dte} days. Stock: {sl} units across {int(r['quantity'] or 0)} orders. Review pricing or schedule clearance promotion."
                 action = "Review Item"
- 
             else:
-                # low stock but above 50 % threshold
-                alert_type = "warning"
-                title      = "Low Stock Alert"
-                icon       = "⚠️"
-                message    = (
-                    f"{name} stock ({sl} units) is below the reorder point of "
-                    f"{rp} units. Plan a replenishment order."
-                )
+                alert_type = "warning"; title = "Low Stock Alert"; icon = "⚠️"
+                message = f"{name} stock ({sl} units) is below the reorder point of {rp} units. Plan a replenishment order."
                 action = "Plan Reorder"
- 
+
             alerts.append({
-                "id":            f"manual_{r['id']}",
-                "type":          alert_type,
-                "icon":          icon,
-                "title":         title,
-                "subtitle":      f"{name}  ·  {r['region'] or r['state'] or ''}",
-                "message":       message,
-                "action":        action,
-                "time":          "Real-time",
-                "source":        "realtime",
-                "product_name":  name,
-                "stock_level":   sl,
-                "reorder_point": rp,
-                "days_to_expiry": dte,
-                "quantity":      int(r["quantity"] or 0),
-                "sales":         float(r["sales"] or 0),
-                "profit":        float(r["profit"] or 0),
-                "avg_discount":  float(r["avg_discount"] or 0),
-                "region":        r["region"] or "",
+                "id": f"manual_{r['id']}", "type": alert_type, "icon": icon,
+                "title": title, "subtitle": f"{name}  ·  {r['region'] or r['state'] or ''}",
+                "message": message, "action": action, "time": "Real-time", "source": "realtime",
+                "product_name": name, "stock_level": sl, "reorder_point": rp,
+                "days_to_expiry": dte, "quantity": int(r["quantity"] or 0),
+                "sales": float(r["sales"] or 0), "profit": float(r["profit"] or 0),
+                "avg_discount": float(r["avg_discount"] or 0), "region": r["region"] or "",
             })
- 
+
         counts = {
-            "total":    len(alerts),
+            "total": len(alerts),
             "critical": sum(1 for a in alerts if a["type"] == "critical"),
-            "warning":  sum(1 for a in alerts if a["type"] == "warning"),
+            "warning": sum(1 for a in alerts if a["type"] == "warning"),
         }
- 
         return jsonify({"alerts": alerts, "counts": counts, "ts": datetime.utcnow().isoformat()})
- 
     finally:
         db.close_connection(conn)
- 
- 
+
+
 @app.route("/api/alerts/count")
 @login_required
 def alerts_count():
-    """
-    Ultra-lightweight endpoint for the bell-badge poller.
-    Returns total count of real-time alerts + ML alerts.
-    """
     conn = db.open_connection()
     try:
-        # real-time (manual products)
         rt = db.run_query(conn, """
             SELECT COUNT(*) AS n FROM manual_products
             WHERE (stock_level < reorder_point)
                OR (shelf_life_days <= 30 AND shelf_life_days IS NOT NULL)
         """)[0]["n"]
- 
-        # ML pipeline alerts
+
         ml = db.run_query(conn, """
             SELECT
-                SUM(CASE WHEN is_anomaly = 1 THEN 1 ELSE 0 END) AS anomalies,
-                SUM(CASE WHEN low_stock   = 1 THEN 1 ELSE 0 END) AS low_stock,
-                SUM(CASE WHEN near_expiry = 1 THEN 1 ELSE 0 END) AS near_expiry
+                SUM(CASE WHEN is_anomaly=1 THEN 1 ELSE 0 END) AS anomalies,
+                SUM(CASE WHEN low_stock=1 THEN 1 ELSE 0 END) AS low_stock,
+                SUM(CASE WHEN near_expiry=1 THEN 1 ELSE 0 END) AS near_expiry
             FROM ml_inventory
         """)[0]
- 
-        total = (
-            int(rt or 0)
-            + min(int(ml["anomalies"] or 0), 5)
-            + min(int(ml["low_stock"]  or 0), 10)
-            + min(int(ml["near_expiry"]or 0), 10)
-        )
- 
+
+        total = int(rt or 0) + min(int(ml["anomalies"] or 0), 5) + min(int(ml["low_stock"] or 0), 10) + min(int(ml["near_expiry"] or 0), 10)
         return jsonify({
-            "total":    total,
+            "total": total,
             "realtime": int(rt or 0),
-            "ml":       int((ml["anomalies"] or 0) + (ml["low_stock"] or 0) + (ml["near_expiry"] or 0)),
+            "ml": int((ml["anomalies"] or 0) + (ml["low_stock"] or 0) + (ml["near_expiry"] or 0)),
         })
- 
     finally:
         db.close_connection(conn)
- 
+
+
+# ── AI recommendation + team workflow endpoints ─────────────────────────────
+@app.route("/api/ai/recommendations/overview")
+@login_required
+def ai_recommendations_overview():
+    conn = db.open_connection()
+    try:
+        items = []
+
+        # Low stock recommendations
+        try:
+            low = db.run_query(conn, """
+                SELECT
+                    sub_category,
+                    MAX(category) AS category,
+                    ROUND(AVG(stock_level),0) AS stock_level,
+                    ROUND(AVG(reorder_point),0) AS reorder_point
+                FROM ml_inventory
+                WHERE low_stock = 1
+                GROUP BY sub_category
+                ORDER BY AVG(stock_level) ASC
+                LIMIT 3
+            """)
+            for r in low:
+                items.append({
+                    "sub_category": r["sub_category"],
+                    "priority": "high",
+                    "title": "AI restock recommendation",
+                    "message": f"{r['sub_category']} is below the reorder point. Current stock is about {int(r['stock_level'] or 0)} against {int(r['reorder_point'] or 0)}.",
+                    "action": "Request restock",
+                    "reason": "Low stock signal"
+                })
+        except Exception:
+            pass
+
+        # Near expiry recommendations
+        try:
+            expiry = db.run_query(conn, """
+                SELECT
+                    sub_category,
+                    MAX(category) AS category,
+                    MAX(near_expiry) AS near_expiry
+                FROM ml_inventory
+                WHERE near_expiry = 1
+                GROUP BY sub_category
+                LIMIT 2
+            """)
+            for r in expiry:
+                items.append({
+                    "sub_category": r["sub_category"],
+                    "priority": "medium",
+                    "title": "AI expiry recommendation",
+                    "message": f"{r['sub_category']} needs an expiry check and shelf review.",
+                    "action": "Verify expiry",
+                    "reason": "Near expiry signal"
+                })
+        except Exception:
+            pass
+
+        # Anomaly recommendations
+        try:
+            anomalies = db.run_query(conn, """
+                SELECT
+                    sub_category,
+                    COUNT(*) AS flags
+                FROM ml_inventory
+                WHERE is_anomaly = 1
+                GROUP BY sub_category
+                LIMIT 2
+            """)
+            for r in anomalies:
+                items.append({
+                    "sub_category": r["sub_category"],
+                    "priority": "medium",
+                    "title": "AI anomaly recommendation",
+                    "message": f"{r['sub_category']} has unusual activity and should be reviewed.",
+                    "action": "Escalate anomaly",
+                    "reason": "Anomaly signal"
+                })
+        except Exception:
+            pass
+
+        if not items:
+            items = [{
+                "sub_category": "Inventory",
+                "priority": "low",
+                "title": "AI review",
+                "message": "No advanced recommendation is available yet. Continue regular stock monitoring.",
+                "action": "Shelf check",
+                "reason": "Fallback"
+            }]
+
+        return jsonify({"items": items})
+
+    finally:
+        db.close_connection(conn)
+
+
+@app.route("/api/ai/recommendation/<path:sub_category>")
+@login_required
+def ai_recommendation(sub_category):
+    conn = db.open_connection()
+    try:
+        try:
+            rows = db.run_query(conn, """
+                SELECT
+                    sub_category,
+                    MAX(category) AS category,
+                    MAX(low_stock) AS low_stock,
+                    MAX(near_expiry) AS near_expiry,
+                    ROUND(AVG(stock_level),0) AS stock_level,
+                    ROUND(AVG(reorder_point),0) AS reorder_point,
+                    ROUND(SUM(sales),2) AS total_sales
+                FROM ml_inventory
+                WHERE sub_category = %s
+                GROUP BY sub_category
+                LIMIT 1
+            """, (sub_category,))
+        except Exception:
+            return jsonify({
+                "sub_category": sub_category,
+                "title": "AI recommendation",
+                "message": "Recommendation service is temporarily unavailable for this item.",
+                "action": "Shelf check",
+                "badge": "ERROR"
+            }), 200
+
+        if not rows:
+            return jsonify({
+                "sub_category": sub_category,
+                "title": "AI review",
+                "message": "No recommendation available for this product yet.",
+                "action": "Review item",
+                "badge": "READY"
+            }), 200
+
+        r = rows[0]
+
+        if int(r.get("low_stock") or 0) == 1:
+            msg = f"Stock is tracking below the reorder point ({int(r.get('stock_level') or 0)} vs {int(r.get('reorder_point') or 0)})."
+            action = "Request restock"
+            badge = "LOW STOCK"
+        elif int(r.get("near_expiry") or 0) == 1:
+            msg = "Shelf life looks sensitive. Verify expiry and move older stock first."
+            action = "Verify expiry"
+            badge = "NEAR EXPIRY"
+        else:
+            msg = "Stock is currently stable. Maintain normal monitoring and verify counts during routine checks."
+            action = "Shelf check"
+            badge = "STABLE"
+
+        return jsonify({
+            "sub_category": sub_category,
+            "title": "AI recommendation",
+            "message": msg,
+            "action": action,
+            "badge": badge
+        }), 200
+
+    finally:
+        db.close_connection(conn)
+@app.route("/api/staff-actions", methods=["GET", "POST"])
+@app.route("/api/staff/actions", methods=["GET", "POST"])
+@login_required
+def staff_actions_endpoint():
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        action_type = (data.get("action_type") or "").strip().lower()
+        product_name = (
+            data.get("product_name")
+            or data.get("sub_category")
+            or ""
+        ).strip()
+        note = (data.get("note") or "").strip()
+        priority = (data.get("priority") or "medium").strip().lower()
+        source = (data.get("source") or "manual").strip().lower()
+
+        if action_type not in ACTION_TYPES:
+            return jsonify({"message": "Invalid action type."}), 400
+        if not product_name:
+            return jsonify({"message": "Product name is required."}), 400
+        if priority not in ("low", "medium", "high", "critical"):
+            priority = "medium"
+
+        action = _create_staff_action_db(
+            action_type, product_name, note, priority, source
+        )
+        return jsonify({"message": "Action submitted successfully.", "action": action}), 201
+
+    status = (request.args.get("status") or "").strip().lower()
+    role = session.get("role", "staff")
+    created_by = session.get("user_name", "")
+
+    actions = _list_staff_actions_db(role, status, created_by)
+    summary = _get_staff_action_summary_db()
+
+    return jsonify({"actions": actions, "summary": summary}), 200
+@app.route("/api/staff-actions/summary", methods=["GET"])
+@app.route("/api/staff/actions/summary", methods=["GET"])
+@login_required
+def staff_actions_summary():
+    return jsonify(_get_staff_action_summary_db()), 200
+
+@app.route("/api/staff/actions/<int:action_id>/status", methods=["POST"])
+@app.route("/api/staff-actions/<int:action_id>/status", methods=["POST"])
+@login_required
+def update_staff_action_status(action_id):
+    if session.get("role") not in ("admin", "inventory_manager"):
+        return jsonify({"message": "Only admin or inventory manager can update action status."}), 403
+
+    data = request.get_json() or {}
+    new_status = (data.get("status") or "").strip().lower()
+
+    if new_status not in ACTION_STATUSES:
+        return jsonify({"message": "Invalid status."}), 400
+
+    action = _update_staff_action_status_db(action_id, new_status)
+
+    if not action:
+        return jsonify({"message": "Action not found."}), 404
+
+    return jsonify({"message": "Action updated.", "action": action}), 200
+
+
+# ── Chat ─────────────────────────────────────────────────────────────────────
 
 @app.route("/api/chat", methods=["POST"])
 @login_required
 def chat():
-    data    = request.get_json() or {}
+    data = request.get_json() or {}
     message = (data.get("message") or "").strip()
     if not message:
         return jsonify({"reply": "Please send a message."}), 400
@@ -1442,85 +1517,47 @@ def chat():
                    ROUND(SUM(sales),2) AS total_sales, ROUND(AVG(profit_margin),2) AS avg_margin
             FROM ml_inventory
         """)[0]
-        low_stock_items   = db.run_query(conn, "SELECT sub_category, AVG(stock_level) AS avg_stock, AVG(reorder_point) AS avg_reorder FROM ml_inventory WHERE low_stock=1 GROUP BY sub_category ORDER BY avg_stock ASC LIMIT 5")
+        low_stock_items = db.run_query(conn, "SELECT sub_category, AVG(stock_level) AS avg_stock, AVG(reorder_point) AS avg_reorder FROM ml_inventory WHERE low_stock=1 GROUP BY sub_category ORDER BY avg_stock ASC LIMIT 5")
         near_expiry_items = db.run_query(conn, "SELECT sub_category, AVG(days_to_expiry) AS avg_days FROM ml_inventory WHERE near_expiry=1 GROUP BY sub_category ORDER BY avg_days ASC LIMIT 5")
-        top_anomalies     = db.run_query(conn, "SELECT sub_category, COUNT(*) AS cnt, ROUND(AVG(discount)*100,1) AS avg_disc, ROUND(AVG(profit),2) AS avg_profit FROM ml_inventory WHERE is_anomaly=1 GROUP BY sub_category ORDER BY cnt DESC LIMIT 5")
-        top_demand        = db.run_query(conn, "SELECT sub_category, SUM(quantity) AS qty FROM ml_inventory GROUP BY sub_category ORDER BY qty DESC LIMIT 5")
-        neg_margin        = db.run_query(conn, "SELECT sub_category, ROUND(SUM(profit)/SUM(sales)*100,2) AS margin FROM ml_inventory GROUP BY sub_category HAVING margin < 0 ORDER BY margin ASC")
+        top_anomalies = db.run_query(conn, "SELECT sub_category, COUNT(*) AS cnt, ROUND(AVG(discount)*100,1) AS avg_disc, ROUND(AVG(profit),2) AS avg_profit FROM ml_inventory WHERE is_anomaly=1 GROUP BY sub_category ORDER BY cnt DESC LIMIT 5")
+        top_demand = db.run_query(conn, "SELECT sub_category, SUM(quantity) AS qty FROM ml_inventory GROUP BY sub_category ORDER BY qty DESC LIMIT 5")
+        neg_margin = db.run_query(conn, "SELECT sub_category, ROUND(SUM(profit)/SUM(sales)*100,2) AS margin FROM ml_inventory GROUP BY sub_category HAVING margin < 0 ORDER BY margin ASC")
     finally:
         db.close_connection(conn)
 
-    context = f"""
-You are an AI inventory assistant for StockGenius, an ML-powered inventory management system.
-Answer questions about the inventory data concisely and helpfully.
-Use bullet points where appropriate. Keep answers under 120 words.
-
-LIVE ML DATA SUMMARY:
-- Sub-categories: {stats['total_products']}
-- Low stock items: {stats['low_stock']}
-- Near expiry items: {stats['near_expiry']}
-- Anomalies (Isolation Forest): {stats['anomalies']}
-- Total sales: ${stats['total_sales']:,.2f}
-- Average profit margin: {stats['avg_margin']}%
-
-LOW STOCK: {', '.join([f"{r['sub_category']} (stock: {round(float(r['avg_stock']),0)})" for r in low_stock_items]) or 'None'}
-NEAR EXPIRY: {', '.join([f"{r['sub_category']} ({round(float(r['avg_days']),0)} days)" for r in near_expiry_items]) or 'None'}
-TOP ANOMALIES: {', '.join([f"{r['sub_category']} ({r['cnt']} flagged)" for r in top_anomalies]) or 'None'}
-HIGHEST DEMAND: {', '.join([f"{r['sub_category']} ({r['qty']} units)" for r in top_demand]) or 'None'}
-NEGATIVE MARGIN: {', '.join([f"{r['sub_category']} ({r['margin']}%)" for r in neg_margin]) or 'None'}
-"""
-
-    try:
-        import anthropic
-        client = anthropic.Anthropic(api_key="YOUR_ANTHROPIC_API_KEY")
-        history = data.get("history", [])
-        messages = [{"role": t["role"], "content": t["content"]}
-                    for t in history[-6:] if t.get("role") in ("user", "assistant")]
-        messages.append({"role": "user", "content": message})
-        response = client.messages.create(model="claude-sonnet-4-20250514",
-                                          max_tokens=300, system=context, messages=messages)
-        reply = response.content[0].text
-    except Exception:
-        reply = rule_based_reply(message, stats, low_stock_items,
-                                 near_expiry_items, top_anomalies, top_demand, neg_margin)
-
+    reply = rule_based_reply(message, stats, low_stock_items, near_expiry_items, top_anomalies, top_demand, neg_margin)
     return jsonify({"reply": reply})
+
 
 
 def rule_based_reply(msg, stats, low_stock, near_expiry, anomalies, demand, neg_margin):
     msg = msg.lower()
-    if any(w in msg for w in ['low stock', 'stock', 'reorder']):
+    if any(w in msg for w in ["low stock", "stock", "reorder"]):
         if low_stock:
-            items = ', '.join([r['sub_category'] for r in low_stock])
-            return f"⚠️ **Low Stock Alert**\n{int(stats['low_stock'])} transactions flagged.\nAffected: {items}."
-        return "✅ No low stock items detected."
-    if any(w in msg for w in ['expir', 'expiry', 'expire']):
+            items = ", ".join([r["sub_category"] for r in low_stock])
+            return f"Low stock items detected: {items}. Total flagged transactions: {int(stats['low_stock'] or 0)}."
+        return "No low stock items detected."
+    if any(w in msg for w in ["expir", "expiry", "expire"]):
         if near_expiry:
-            items = ', '.join([f"{r['sub_category']} ({round(float(r['avg_days']),0)} days)" for r in near_expiry])
-            return f"📅 **Near Expiry**\n{items}"
-        return "✅ No items near expiry."
-    if any(w in msg for w in ['anomal', 'isolation', 'suspicious']):
+            items = ", ".join([f"{r['sub_category']} ({round(float(r['avg_days']),0)} days)" for r in near_expiry])
+            return f"Near expiry items: {items}."
+        return "No items near expiry."
+    if any(w in msg for w in ["anomal", "isolation", "suspicious"]):
         if anomalies:
-            items = ', '.join([f"{r['sub_category']} ({r['cnt']})" for r in anomalies])
-            return f"🔴 **Anomalies**\n{int(stats['anomalies'])} flagged.\nTop: {items}."
-        return "✅ No anomalies detected."
-    if any(w in msg for w in ['demand', 'forecast', 'arima', 'predict']):
-        items = ', '.join([f"{r['sub_category']} ({r['qty']} units)" for r in demand])
-        return f"📈 **Top Demand**\n{items}"
-    if any(w in msg for w in ['margin', 'profit', 'loss', 'negative']):
+            items = ", ".join([f"{r['sub_category']} ({r['cnt']})" for r in anomalies])
+            return f"Top anomalies: {items}. Total flagged rows: {int(stats['anomalies'] or 0)}."
+        return "No anomalies detected."
+    if any(w in msg for w in ["demand", "forecast", "predict"]):
+        items = ", ".join([f"{r['sub_category']} ({r['qty']} units)" for r in demand])
+        return f"Highest demand items: {items}."
+    if any(w in msg for w in ["margin", "profit", "loss", "negative"]):
         if neg_margin:
-            items = ', '.join([f"{r['sub_category']} ({r['margin']}%)" for r in neg_margin])
-            return f"💸 **Negative Margin Products**\n{items}"
-        return "✅ All products have positive margins."
-    if any(w in msg for w in ['hello', 'hi', 'hey', 'help']):
-        return (f"👋 Hello! I can help with:\n• Low stock alerts ({int(stats['low_stock'])} flagged)\n"
-                f"• Near expiry ({int(stats['near_expiry'])} items)\n"
-                f"• Anomalies ({int(stats['anomalies'])} found)\n• Demand forecasting\n• Profit margins")
-    if any(w in msg for w in ['summary', 'overview', 'dashboard']):
-        return (f"📊 **Summary**\n• {stats['total_products']} sub-categories\n"
-                f"• {int(stats['low_stock'])} low stock\n• {int(stats['near_expiry'])} near expiry\n"
-                f"• {int(stats['anomalies'])} anomalies\n• ${float(stats['total_sales']):,.0f} total sales")
-    return "I can help with stock, expiry, anomalies, demand and margins. Try: 'Which products are low on stock?'"
+            items = ", ".join([f"{r['sub_category']} ({r['margin']}%)" for r in neg_margin])
+            return f"Negative margin products: {items}."
+        return "All products currently have non-negative margins."
+    if any(w in msg for w in ["hello", "hi", "hey", "help"]):
+        return "I can help with low stock, expiry, anomalies, demand, and margins."
+    return "Ask me about stock, expiry, anomalies, demand, or margins."
 
 
 if __name__ == "__main__":

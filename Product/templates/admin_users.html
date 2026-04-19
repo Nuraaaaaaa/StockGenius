@@ -51,7 +51,24 @@
                 <td class="px-4 py-3">{{ user.id }}</td>
                 <td class="px-4 py-3">{{ user.full_name }}</td>
                 <td class="px-4 py-3">{{ user.email }}</td>
-                <td class="px-4 py-3">{{ user.role }}</td>
+                <td class="px-4 py-3">
+                  {% if user.role == 'admin' %}
+                  <span
+                    class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700"
+                    >Admin</span
+                  >
+                  {% elif user.role == 'inventory_manager' %}
+                  <span
+                    class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700"
+                    >Inventory Manager</span
+                  >
+                  {% else %}
+                  <span
+                    class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"
+                    >Staff</span
+                  >
+                  {% endif %}
+                </td>
                 <td class="px-4 py-3">
                   <div class="flex items-center gap-2">
                     <!-- EDIT BUTTON -->

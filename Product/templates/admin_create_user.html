@@ -60,9 +60,13 @@
                 required
               />
               <p class="mt-1 text-xs text-gray-500">
-                Password must be at least 8 characters and include at least one uppercase letter, one lowercase letter, and one number.
+                Password must be at least 8 characters and include at least one
+                uppercase letter, one lowercase letter, and one number.
               </p>
-              <p id="passwordError" class="mt-1 text-sm text-red-600 hidden"></p>
+              <p
+                id="passwordError"
+                class="mt-1 text-sm text-red-600 hidden"
+              ></p>
             </div>
 
             <div>
@@ -73,9 +77,21 @@
                 id="role"
                 class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="staff">Staff</option>
-                <option value="admin">Admin</option>
+                <option value="staff">Staff – view-only access</option>
+                <option value="inventory_manager">
+                  Inventory Manager – can add/edit/delete products
+                </option>
+                <option value="admin">
+                  Admin – full access including user management
+                </option>
               </select>
+              <p class="mt-1 text-xs text-gray-500">
+                <strong>Staff:</strong> can view inventory, alerts,
+                analytics.<br />
+                <strong>Inventory Manager:</strong> all staff access +
+                add/edit/delete products + quick restock.<br />
+                <strong>Admin:</strong> full access including user management.
+              </p>
             </div>
 
             <div class="flex gap-3 pt-2">
@@ -160,7 +176,7 @@
           showError(
             nameError,
             "Full name must contain at least 2 words, for example John Doe.",
-            fullNameInput
+            fullNameInput,
           );
           hasError = true;
         }
@@ -182,16 +198,16 @@
           full_name,
           email,
           password,
-          role
+          role,
         };
 
         try {
           const res = await fetch("/api/admin/users", {
             method: "POST",
             headers: {
-              "Content-Type": "application/json"
+              "Content-Type": "application/json",
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
           });
 
           const data = await res.json();

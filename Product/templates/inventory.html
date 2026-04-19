@@ -80,12 +80,20 @@
         <!-- FILTER BAR -->
         <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
           <div class="flex gap-2 flex-wrap">
+            {% if user_role in ('admin', 'inventory_manager') %}
             <button
               onclick="openAddProductModal()"
               class="btn-primary bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-sm"
             >
               + Add Product
             </button>
+            {% else %}
+            <div
+              class="flex items-center gap-2 px-4 py-2.5 bg-gray-100 rounded-xl text-sm text-gray-400"
+            >
+              📦 View-Only Mode
+            </div>
+            {% endif %}
 
             <!-- FIX: uses all_categories passed from server (not just paginated products) -->
             <select
@@ -131,6 +139,15 @@
           </div>
         </div>
 
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <p id="resultCount" class="text-sm text-gray-500"></p>
+          <div
+            class="px-4 py-2 rounded-xl bg-blue-50 border border-blue-100 text-xs font-medium text-blue-700"
+          >
+            AI suggestions + staff action workflow enabled
+          </div>
+        </div>
+
         <!-- PRODUCTS GRID -->
         <div
           id="productGrid"
@@ -145,11 +162,12 @@
             data-status="{% if product.low_stock == 1 %}low_stock{% elif product.near_expiry == 1 %}near_expiry{% else %}in_stock{% endif %}"
             data-sales="{{ product.total_sales }}"
             data-stock="{{ product.avg_stock_level }}"
+            data-subcat="{{ product.sub_category }}"
           >
             <img
               src="{{ product.image }}"
               class="rounded-xl mb-3 w-full h-40 object-cover"
-              onerror="this.src='https://via.placeholder.com/300x160?text={{ product.sub_category }}'"
+              onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%27320%27 height=%27160%27><rect width=%27100%25%27 height=%27100%25%27 fill=%27%23e5e7eb%27/><text x=%2750%25%27 y=%2750%25%27 dominant-baseline=%27middle%27 text-anchor=%27middle%27 fill=%27%236b7280%27 font-size=%2720%27 font-family=%27Arial%27>{{ product.sub_category }}</text></svg>'"
             />
 
             <div class="flex justify-between items-start mb-1">
@@ -228,7 +246,30 @@
               </div>
             </div>
 
+            <div
+              class="mb-4 rounded-xl bg-indigo-50 border border-indigo-100 px-3 py-2"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <span
+                  class="text-[11px] font-semibold uppercase tracking-wide text-indigo-600"
+                  >AI Recommendation</span
+                >
+                <span
+                  class="text-[10px] px-2 py-0.5 rounded-full bg-white text-indigo-600 border border-indigo-100"
+                  id="badge-{{ loop.index }}"
+                  >Checking</span
+                >
+              </div>
+              <p
+                class="text-xs text-indigo-700 mt-1 recommendation-text"
+                data-subcat="{{ product.sub_category }}"
+              >
+                Loading recommendation...
+              </p>
+            </div>
+
             <div class="flex gap-2">
+              {% if user_role in ('admin', 'inventory_manager') %}
               <!-- FIX: pass URL-encoded sub_category, not product.id -->
               <button
                 onclick="openEditModal('{{ product.sub_category | urlencode }}')"
@@ -242,6 +283,22 @@
               >
                 🗑
               </button>
+              {% else %}
+              <div class="flex-1 grid grid-cols-2 gap-2">
+                <button
+                  onclick="submitStaffAction('shelf_check', '{{ product.sub_category }}')"
+                  class="bg-blue-50 text-blue-700 py-2 rounded-xl text-xs font-semibold border border-blue-100"
+                >
+                  Shelf Check
+                </button>
+                <button
+                  onclick="submitStaffAction('restock_request', '{{ product.sub_category }}')"
+                  class="bg-amber-50 text-amber-700 py-2 rounded-xl text-xs font-semibold border border-amber-100"
+                >
+                  Request Restock
+                </button>
+              </div>
+              {% endif %}
             </div>
           </div>
           {% endfor %} {% else %}
@@ -1046,6 +1103,50 @@
           btn.textContent = "Yes, Delete";
         });
 
+      async function submitStaffAction(actionType, subCategory) {
+        const note = window.prompt(
+          `Add a note for ${subCategory} (${actionType.replaceAll("_", " ")})`,
+          "",
+        );
+        if (note === null) return;
+        try {
+          const res = await fetch("/api/staff-actions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action_type: actionType,
+              product_name: subCategory,
+              note: note,
+              source: "manual",
+            }),
+          });
+          const data = await res.json();
+          if (res.ok) showToast(data.message || "Action saved.");
+          else showToast(data.message || "Failed to save action.", "error");
+        } catch {
+          showToast("Network error.", "error");
+        }
+      }
+
+      async function loadCardRecommendations() {
+        const items = document.querySelectorAll(".recommendation-text");
+        for (const el of items) {
+          const subcat = el.dataset.subcat;
+          const badge = el.parentElement.querySelector('[id^="badge-"]');
+          try {
+            const res = await fetch(
+              `/api/ai/recommendation/${encodeURIComponent(subcat)}`,
+            );
+            const data = await res.json();
+            el.textContent = data.message || "No recommendation available.";
+            if (badge) badge.textContent = data.badge || "READY";
+          } catch {
+            el.textContent = "Unable to load recommendation.";
+            if (badge) badge.textContent = "ERROR";
+          }
+        }
+      }
+
       function applyFilters() {
         const search = document
           .getElementById("searchInput")
@@ -1109,12 +1210,9 @@
           }
         });
       });
-
       document.addEventListener("DOMContentLoaded", () => {
-        const total = document.querySelectorAll(".product-card").length;
-        document.getElementById("resultCount").textContent = total
-          ? `${total} products found`
-          : "";
+        applyFilters();
+        loadCardRecommendations();
       });
     </script>
   </body>

@@ -25,7 +25,7 @@ def app():
     sys.modules.setdefault("database", types.ModuleType("database"))
     sys.modules["database.database"] = fake_db_module
 
-    import app as flask_app
+    import app_p as flask_app
     flask_app.app.config["TESTING"] = True
     flask_app.app.config["SECRET_KEY"] = "test-secret"
     flask_app.app.config["WTF_CSRF_ENABLED"] = False
@@ -190,7 +190,7 @@ class TestAddProductValidation:
 class TestAllowedFileExtension:
     @pytest.fixture(autouse=True)
     def import_helper(self):
-        import app as flask_app
+        import app_p as flask_app
         self._fn = flask_app._allowed_file
 
     @pytest.mark.parametrize("filename", [
@@ -210,7 +210,7 @@ class TestAllowedFileExtension:
 class TestRuleBasedReply:
     @pytest.fixture(autouse=True)
     def setup(self):
-        import app as flask_app
+        import app_p as flask_app
         self.fn = flask_app.rule_based_reply
         self.stats = {
             "total_products": 17, "low_stock": 4, "near_expiry": 2,

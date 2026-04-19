@@ -1224,6 +1224,31 @@
       // ════════════════════════════════════════
       // PDF EXPORT — high-quality, crisp text
       // ════════════════════════════════════════
+
+async function loadAnalyticsExtras() {
+  try {
+    const [recRes, actionRes] = await Promise.all([
+      fetch('/api/ai/recommendations/overview'),
+      fetch('/api/staff-actions/summary')
+    ]);
+    if (recRes.ok) {
+      const data = await recRes.json();
+      document.getElementById('analyticsAiList').innerHTML = (data.items || []).slice(0,5).map(item => `
+        <div class="rounded-xl border border-slate-200 p-3">
+          <div class="flex items-center justify-between gap-2"><p class="text-sm font-semibold text-slate-800">${item.sub_category}</p><span class="text-[10px] px-2 py-0.5 rounded-full ${item.priority==='high'?'bg-red-100 text-red-600':'bg-amber-100 text-amber-700'}">${item.reason}</span></div>
+          <p class="text-xs text-slate-500 mt-1">${item.message}</p>
+        </div>`).join('') || '<p class="text-sm text-slate-400">No AI brief available.</p>';
+    }
+    if (actionRes.ok) {
+      const data = await actionRes.json();
+      document.getElementById('analyticsOpenActions').textContent = data.open || 0;
+      document.getElementById('analyticsWorkingActions').textContent = data.in_progress || 0;
+      document.getElementById('analyticsResolvedActions').textContent = data.resolved || 0;
+      document.getElementById('analyticsTotalActions').textContent = data.total || 0;
+    }
+  } catch(e) { console.error(e); }
+}
+
       async function exportToPDF() {
         const btn = document.getElementById("exportBtn");
         const btnText = document.getElementById("exportBtnText");
